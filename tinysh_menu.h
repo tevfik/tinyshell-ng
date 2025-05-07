@@ -47,7 +47,6 @@
 #define TINYSH_MENU_H
 
 #include "tinysh.h"
-#include <stdint.h>
 
 /* Menu-based UI Configuration */
 #ifndef MENU_MAX_DEPTH
@@ -93,7 +92,7 @@
  */
 typedef struct {
     char *title;                     // Display title
-    uint8_t type;                    // Item type flags
+    unsigned char type;              // Item type flags
     
     union {
         // For submenu items (MENU_ITEM_SUBMENU)
@@ -126,18 +125,18 @@ typedef struct {
 typedef struct tinysh_menu_t {
     char *title;                     // Menu title
     tinysh_menu_item_t items[MENU_MAX_ITEMS];  // Menu items
-    uint8_t item_count;              // Number of valid items
-    uint8_t parent_index;            // Index in parent menu (-1 for root)
+    unsigned char item_count;        // Number of valid items
+    unsigned char parent_index;      // Index in parent menu (-1 for root)
 } tinysh_menu_t;
 
 /* Menu state */
 typedef struct {
     tinysh_menu_t *current_menu;     // Current active menu
-    uint8_t current_index;           // Currently selected item
-    uint8_t scroll_offset;           // Scroll position for long menus
-    uint8_t menu_stack_idx;          // Current position in menu stack
+    unsigned char current_index;     // Currently selected item
+    unsigned char scroll_offset;     // Scroll position for long menus
+    unsigned char menu_stack_idx;    // Current position in menu stack
     tinysh_menu_t *menu_stack[MENU_MAX_DEPTH];  // Menu navigation stack
-    uint8_t index_stack[MENU_MAX_DEPTH];        // Selected index stack
+    unsigned char index_stack[MENU_MAX_DEPTH];  // Selected index stack
 } tinysh_menu_state_t;
 
 /* Public API */

@@ -1,5 +1,5 @@
-#include <stdint.h>
 #include <string.h>
+#include <stdint.h> 
 #include "tinysh.h"
 
 void (*tinysh_char_out)(unsigned char);	/* Pointer to the output stream */
@@ -10,7 +10,7 @@ char tinyshell_active = 1;
 
 #if AUTHENTICATION_ENABLED
 /* Authentication state */
-uint8_t tinysh_auth_level = TINYSH_AUTH_NONE;
+unsigned char tinysh_auth_level = TINYSH_AUTH_NONE;
 
 /* Authentication command */
 tinysh_cmd_t auth_cmd = {
@@ -24,7 +24,7 @@ tinysh_cmd_t help_cmd = {
 };
 
 tinysh_cmd_t quit_cmd = {
-    0, "quit", "exit TinyShell", _NOARG_, quit_fnt, (void *)&tinyshell_active, 0, 0
+    0, "quit", "exit shell", _NOARG_, quit_fnt, (void *)&tinyshell_active, 0, 0
 };
 
 static char input_buffers[HISTORY_DEPTH][BUFFER_SIZE+1];
@@ -117,7 +117,7 @@ void quit_fnt(int argc, char **argv) {
 #endif
 
   if(tinysh_printf)
-      tinysh_printf("Exiting TinyShell...\r\n");
+      tinysh_printf("Exiting shell...\r\n");
   
   /* Exit handled by the application, we just set the flag */
 }
@@ -146,17 +146,17 @@ void auth_cmd_handler(int argc, char **argv) {
 }
 
 /* Password verification */
-uint8_t tinysh_verify_password(const char *password) {
+unsigned char tinysh_verify_password(const char *password) {
     if (!password) return 0;
     return (strcmp(password, DEFAULT_ADMIN_PASSWORD) == 0);
 }
 
 /* Auth level getter/setter */
-void tinysh_set_auth_level(uint8_t level) {
+void tinysh_set_auth_level(unsigned char level) {
     tinysh_auth_level = level;
 }
 
-uint8_t tinysh_get_auth_level(void) {
+unsigned char tinysh_get_auth_level(void) {
     return tinysh_auth_level;
 }
 
@@ -953,7 +953,7 @@ char* tinysh_float2str(float f, int precision)
         
         // Build the integer part in reverse
         while (a > 0 && temp_i < 11) {
-            temp[temp_i++] = '0' + (a % 10);
+            temp[temp_i++] = (char)('0' + (a % 10));
             a /= 10;
         }
         
@@ -971,8 +971,8 @@ char* tinysh_float2str(float f, int precision)
         for (b = 0; b < precision; b++) {
             f *= 10.0f;
             int digit = (int)f;
-            str[i++] = '0' + digit;
-            f -= digit;
+            str[i++] = (char)('0' + digit);
+            f -= (float)digit;
         }
     }
     
@@ -992,16 +992,16 @@ void tinysh_reset_context(void) {
 
 #if !AUTHENTICATION_ENABLED
 // Stub functions when authentication is disabled
-uint8_t tinysh_verify_password(const char *password) {
+unsigned char tinysh_verify_password(const char *password) {
     (void)password;
     return 0;
 }
 
-void tinysh_set_auth_level(uint8_t level) {
+void tinysh_set_auth_level(unsigned char level) {
     (void)level;
 }
 
-uint8_t tinysh_get_auth_level(void) {
+unsigned char tinysh_get_auth_level(void) {
     return 0;
 }
 #endif

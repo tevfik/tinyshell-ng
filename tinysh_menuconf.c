@@ -26,6 +26,9 @@
 
 #include "tinysh_menu.h"
 #include "tinysh.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h> 
 
 /* Forward declarations of menu functions */
 static void show_system_info(void);
@@ -111,7 +114,7 @@ static void set_parameter_with_args(int argc, char **argv) {
                      argv[0], argv[1]);
     }
 }
-
+void tinysh_menuconf_init(void);
 /* Function to initialize the menu system */
 void tinysh_menuconf_init(void) {
     // Generate command menu and link it to main menu

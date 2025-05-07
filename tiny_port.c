@@ -6,7 +6,6 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <stdint.h>
 
 static struct termios orig_termios; /* Original terminal settings */
 

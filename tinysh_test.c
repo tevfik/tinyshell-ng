@@ -2,8 +2,7 @@
 #include "tinysh.h"
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdarg.h>  // Add this for va_list, va_start, va_end
+#include <stdarg.h>  // For va_list
 
 /* Test stats */
 static int tests_run = 0;

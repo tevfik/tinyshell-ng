@@ -25,7 +25,7 @@
 #define MAX_ARGS                    8
 #define TOPCHAR                    '/'
 #define ECHO_INPUT                  1
-#define PARTIAL_MATCH               0
+#define PARTIAL_MATCH               1
 #define AUTOCOMPLATION              1
 #define _PROMPT_                    "tinysh> "
 

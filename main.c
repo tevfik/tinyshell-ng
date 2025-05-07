@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // Signal handler to clean up before exit
 void sigint_handler(int sig) {

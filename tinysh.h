@@ -43,7 +43,7 @@
 #define TINYSH_H_
 
 #include <stdlib.h>
-#include <stdint.h>
+#include <stdint.h> 
 #include "project-conf.h"
 
 #define TINYSHELL_VERSION       "0.1.0"
@@ -115,20 +115,20 @@ typedef struct tinysh_cmd_t {
 #define TINYSH_AUTH_ADMIN         1  // Admin authenticated
 
 /* Authentication session state */
-extern uint8_t tinysh_auth_level;
+extern unsigned char tinysh_auth_level;
 
 /* Authentication command */
 extern tinysh_cmd_t auth_cmd;
 
 /* Authentication functions */
 void tinysh_auth_init(void);
-uint8_t tinysh_verify_password(const char *password);
-void tinysh_set_auth_level(uint8_t level);
-uint8_t tinysh_get_auth_level(void);
+unsigned char tinysh_verify_password(const char *password);
+void tinysh_set_auth_level(unsigned char level);
+unsigned char tinysh_get_auth_level(void);
 void auth_cmd_handler(int argc, char **argv);
 
 /* Admin command flag - store in the highest bit of a byte in cmd struct */
-#define TINYSH_CMD_ADMIN          0x80
+#define TINYSH_CMD_ADMIN          0x80U
 
 /* Helper macro to create admin command */
 #define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg) \
@@ -136,7 +136,7 @@ void auth_cmd_handler(int argc, char **argv);
       (void*)(((uintptr_t)(arg)) | (TINYSH_CMD_ADMIN << 24)), 0, 0 }
 
 /* Non-invasive way to check if a command requires admin rights */
-static inline uint8_t tinysh_is_admin_command(tinysh_cmd_t *cmd) {
+static inline unsigned char tinysh_is_admin_command(tinysh_cmd_t *cmd) {
     return (((uintptr_t)(cmd->arg)) >> 24) & TINYSH_CMD_ADMIN;
 }
 
@@ -149,7 +149,7 @@ static inline void* tinysh_get_real_arg(tinysh_cmd_t *cmd) {
 #define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg) \
     { parent, name, help, usage, function, arg, 0, 0 }
 
-static inline uint8_t tinysh_is_admin_command(tinysh_cmd_t *cmd) {
+static inline unsigned char tinysh_is_admin_command(tinysh_cmd_t *cmd) {
     (void)cmd;  // Prevent unused parameter warning
     return 0;  // Always return false when authentication is disabled
 }
