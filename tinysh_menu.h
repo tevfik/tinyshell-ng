@@ -61,6 +61,54 @@
 #define MENU_DISPLAY_ITEMS    5      // Number of items to display at once
 #endif
 
+/* Color support configuration */
+#ifndef MENU_COLOR_ENABLED
+#define MENU_COLOR_ENABLED     1      // Enable colors by default
+#endif
+
+/* ANSI Color codes - stored in flash, not RAM */
+#if MENU_COLOR_ENABLED
+#define COLOR_RESET       "\033[0m"
+#define COLOR_BOLD        "\033[1m"
+#define COLOR_NORMAL      "\033[22m"
+#define COLOR_BLACK       "\033[30m"
+#define COLOR_RED         "\033[31m"
+#define COLOR_GREEN       "\033[32m"
+#define COLOR_YELLOW      "\033[33m"
+#define COLOR_BLUE        "\033[34m"
+#define COLOR_MAGENTA     "\033[35m"
+#define COLOR_CYAN        "\033[36m"
+#define COLOR_WHITE       "\033[37m"
+#define COLOR_BG_BLACK    "\033[40m"
+#define COLOR_BG_CYAN     "\033[46m"
+#define COLOR_DIM         "\033[2m"
+#define COLOR_BG_RED      "\033[41m"
+
+/* Theme definitions - single place to customize */
+/* Sunset Theme - Warm colors with orange and red accents */
+#define THEME_TITLE       COLOR_BOLD COLOR_YELLOW        /* Bold yellow for titles */
+#define THEME_HEADER      COLOR_RED                      /* Red for headers */
+#define THEME_SELECTED    COLOR_BLACK COLOR_BG_RED       /* Black on red for selection */
+#define THEME_NORMAL      COLOR_WHITE                    /* White for normal text */
+#define THEME_ADMIN       COLOR_MAGENTA                  /* Magenta for admin items */
+#define THEME_SUBMENU     COLOR_YELLOW                   /* Yellow for submenu indicators */
+#define THEME_FOOTER      COLOR_DIM COLOR_WHITE          /* Dimmed white for footer */
+#define THEME_ERROR       COLOR_BOLD COLOR_RED           /* Bold red for errors */
+#define THEME_PROMPT      COLOR_RED                      /* Red for prompts */
+#else
+/* Non-color terminal support */
+#define COLOR_RESET       ""
+#define THEME_TITLE       ""
+#define THEME_HEADER      ""
+#define THEME_SELECTED    ""
+#define THEME_NORMAL      ""
+#define THEME_ADMIN       ""
+#define THEME_SUBMENU     ""
+#define THEME_FOOTER      ""
+#define THEME_ERROR       ""
+#define THEME_PROMPT      ""
+#endif
+
 /* Menu item type flags */
 #define MENU_ITEM_NORMAL      0x00   // Regular menu item
 #define MENU_ITEM_SUBMENU     0x01   // Has submenu

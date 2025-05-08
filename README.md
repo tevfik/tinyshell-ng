@@ -1,16 +1,17 @@
-# TinyShell - Lightweight Embedded Command-Line Interface
+# TinyShell-NG: Modern Lightweight Embedded Command-Line Interface
 
-TinyShell is a compact, modular command-line shell designed for embedded systems with limited resources. It offers both a traditional command-line interface and an optional menu-based navigation system for improved user experience.
+TinyShell-NG is a compact, modular command-line shell designed for embedded systems with limited resources. It offers both a traditional command-line interface and a feature-rich menu-based navigation system for improved user experience.
 
-## Features
 
-- **Minimal Memory Footprint**: Configurable buffer sizes and resource usage
-- **Command Line Interface**: Parse and execute custom commands
-- **Command Hierarchy**: Support for nested commands and submenus
-- **Navigation System**: Hierarchical menu interface with arrow key navigation
-- **History Support**: Command recall with configurable depth
-- **Authentication**: Optional access control for privileged commands
+## Key Features
+
+- **Ultra-Lightweight**: Configurable buffer sizes with minimal RAM footprint
+- **Visual UI**: ANSI color-based terminal menu interface 
+- **Memory Efficient**: Optimized for memory-constrained environments
+- **Hierarchical Navigation**: Nested menus with intuitive navigation
+- **Authentication System**: Role-based command access control
 - **Cross-Platform**: Works on embedded systems and desktop environments
+- **Command System**: Parse and execute structured commands
 - **Extensible**: Easy to add custom commands and menus
 
 ## Architecture
@@ -85,10 +86,10 @@ Menu mode provides a user-friendly interface with arrow-key navigation:
 
 ```
 === TinyShell Main Menu ===
- [↑/↓] Select  [Enter] Execute  [ESC/q] Back
+ [↑/↓] Select  [Enter] Execute  [q] Back
 ----------------------------------------------
 > ... System
-1 ... Tools
+1     Tools
 2 ... Commands
 3     Set Parameter
 4     Exit Menu Mode
@@ -117,7 +118,7 @@ void my_cmd_handler(int argc, char **argv) {
 
 // Define command structure
 tinysh_cmd_t my_cmd = {
-    0,                  // Next command pointer (filled by tinysh)
+    0,                  // Next command pointer
     "mycommand",        // Command name
     "my custom command",// Help text
     "[args...]",        // Arguments help
@@ -291,6 +292,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Add command history navigation in menu mode
 - Improve memory management for constrained environments
-- Add support for colors in menu display
 - Enhance tab completion functionality
 - Create platform-specific ports for common microcontrollers

@@ -31,7 +31,7 @@ static int handle_argument_input(char c); /* Keep return as int for compatibilit
 /* Forward variable declarations to ensure visibility */
 static tinysh_menu_t cmd_menu;
 static tinysh_menu_t cmd_submenus[MAX_CMD_SUBMENUS];
-static int submenu_count = 0;  
+static int submenu_count = 0;
 static char submenu_titles[MAX_CMD_SUBMENUS][64];
 
 /* Menu command */
@@ -39,6 +39,29 @@ tinysh_cmd_t menu_cmd = {
     0, "menu", "enter menu-based UI mode", 0, 
     menu_cmd_handler, 0, 0, 0
 };
+
+/**
+ * Apply a color theme and return to previous position
+ * Memory-efficient approach: doesn't allocate any memory
+ */
+static void apply_theme(const char* color_code) {
+#if MENU_COLOR_ENABLED
+    if (color_code && *color_code) {
+        tinysh_printf("%s", color_code);
+    }
+#else
+    (void)color_code; // Prevent unused parameter warning
+#endif
+}
+
+/**
+ * Reset colors to default terminal colors
+ */
+static void reset_theme(void) {
+#if MENU_COLOR_ENABLED
+    tinysh_printf("%s", COLOR_RESET);
+#endif
+}
 
 /**
  * Initialize menu system
@@ -164,14 +187,11 @@ int tinysh_menu_process_char(char c) {
             escape_char_count = 0;
             return 1;
             
-        case '\r': // CR
-        case '\n': // LF
-        case ' ':  // Space - alternative selection key
+        case MENU_KEY_ENTER:
             tinysh_menu_execute_selection();
             return 1;
             
-        case MENU_KEY_BACK: // This is already 'q' from the header file
-        case 'Q':  // Just handle uppercase Q separately
+        case MENU_KEY_BACK:
             if (!tinysh_menu_go_back()) {
                 tinysh_menu_exit();
             }
@@ -184,7 +204,6 @@ int tinysh_menu_process_char(char c) {
                 if (index < menu_state.current_menu->item_count) {
                     menu_select_item((unsigned char)index);
                     tinysh_menu_display();
-                    tinysh_menu_execute_selection();
                 }
                 return 1;
             }
@@ -239,9 +258,7 @@ void tinysh_menu_execute_selection(void) {
     tinysh_menu_t *menu = menu_state.current_menu;
     tinysh_menu_item_t *item;
     
-    if (!menu || menu_state.current_index >= menu->item_count) {
-        return;
-    }
+    if (!menu || menu_state.current_index >= menu->item_count) return;
     
     item = &menu->items[menu_state.current_index];
     
@@ -288,34 +305,41 @@ static void display_menu_header(void) {
     tinysh_menu_t *menu = menu_state.current_menu;
     
     // Define the display width
-    int menu_seperator_len = strlen(MENU_SEPARATOR);
+    int menu_separator_len = strlen(MENU_SEPARATOR);
 
     // Calculate the full title text width
     int title_len = (int)(strlen(MENU_TITLE_PREFIX) + strlen(menu->title) + strlen(MENU_TITLE_SUFFIX));
     
     // Calculate left padding to center the title
-    int padding = (menu_seperator_len - title_len) / 2;
-    if (padding < 0) padding = 0;  // Safety check
+    int padding = (menu_separator_len - title_len) / 2;
+    if (padding < 0) padding = 0;
     
     // Print the centered title with padding
     tinysh_printf("\r\n");
     for (int i = 0; i < padding; i++) {
         tinysh_printf(" ");
     }
-    tinysh_printf("%s%s%s\r\n", MENU_TITLE_PREFIX, menu->title, MENU_TITLE_SUFFIX);
     
+    // Apply title theme
+    apply_theme(THEME_TITLE);
+    tinysh_printf("%s%s%s", MENU_TITLE_PREFIX, menu->title, MENU_TITLE_SUFFIX);
+    reset_theme();
+    tinysh_printf("\r\n");
+
     // Center the navigation help
-    const char *nav_help = "[↑/↓] Select  [Enter] Execute  [q] Back";
-    int nav_padding = (menu_seperator_len - (int)strlen(nav_help)) / 2;
+    const char *nav_help = "[↑/↓] Select  [Enter/→] Execute  [q/←] Back";
+    int nav_padding = (menu_separator_len - (int)strlen(nav_help)) / 2;
     if (nav_padding < 0) nav_padding = 0;
     
     for (int i = 0; i < nav_padding; i++) {
         tinysh_printf(" ");
     }
-    tinysh_printf("%s\r\n", nav_help);
     
-    // Print the separator line
-    tinysh_printf("%s\r\n",MENU_SEPARATOR);
+    // Apply header theme to navigation help
+    apply_theme(THEME_HEADER);
+    tinysh_printf("%s", nav_help);
+    reset_theme();
+    tinysh_printf("\r\n%s\r\n", MENU_SEPARATOR);
 }
 
 /**
@@ -329,30 +353,54 @@ static void display_menu_item(unsigned char index, char is_selected) {
     
     item = &menu->items[index];
     
-    /* Display selector if this is the selected item */
+    // Apply selection theme if this is the selected item
+    if (is_selected) {
+        apply_theme(THEME_SELECTED);
+    } else {
+        apply_theme(THEME_NORMAL);
+    }
+
+    /* Display selector or index */
     if (is_selected) {
         tinysh_printf("%s ", MENU_SELECTOR);
-        
-        /* Display submenu indicator if needed */
-        if (item->type & MENU_ITEM_SUBMENU) {
-            tinysh_printf("%s ", MENU_SUBMENU_INDICATOR);
-        } else {
-            tinysh_printf("%s ", MENU_INDENT);
-        }
     } else {
         tinysh_printf("%d ", index);
+    }
+
+    /* Display submenu indicator if needed */
+    if (item->type & MENU_ITEM_SUBMENU) {
+        // Temporarily switch to submenu theme
+        reset_theme();
+        apply_theme(THEME_SUBMENU);
+        tinysh_printf("%s", MENU_SUBMENU_INDICATOR);
+        reset_theme();
         
-        /* Display submenu indicator if needed */
-        if (item->type & MENU_ITEM_SUBMENU) {
-            tinysh_printf("%s ", MENU_SUBMENU_INDICATOR);
+        // Return to original theme
+        if (is_selected) {
+            apply_theme(THEME_SELECTED);
         } else {
-            tinysh_printf("%s ", MENU_INDENT);
+            apply_theme(THEME_NORMAL);
         }
+        tinysh_printf(" ");
+    } else {
+        tinysh_printf("%s ", MENU_INDENT);
     }
     
     /* Display admin indicator if needed */
     if (item->type & MENU_ITEM_ADMIN) {
-        tinysh_printf("%s ", MENU_ADMIN_INDICATOR);
+        // Temporarily switch to admin theme
+        reset_theme();
+        apply_theme(THEME_ADMIN);
+        tinysh_printf("%s", MENU_ADMIN_INDICATOR);
+        reset_theme();
+
+        // Return to original theme
+        if (is_selected) {
+            apply_theme(THEME_SELECTED);
+        } else {
+            apply_theme(THEME_NORMAL);
+        }
+        tinysh_printf(" ");
     } else {
         tinysh_printf("  ");
     }
@@ -360,6 +408,8 @@ static void display_menu_item(unsigned char index, char is_selected) {
     /* Display item title */
     tinysh_printf("%s", item->title);
     
+    // Reset colors at end of line
+    reset_theme();
     tinysh_printf("\r\n");
 }
 
@@ -369,17 +419,19 @@ static void display_menu_item(unsigned char index, char is_selected) {
 static void display_menu_footer(void) {
     tinysh_menu_t *menu = menu_state.current_menu;
     
+    tinysh_printf("%s\r\n", MENU_SEPARATOR);
+
     /* Show pagination info if needed */
     if (menu->item_count > MENU_DISPLAY_ITEMS) {
-        tinysh_printf("%s\r\n",MENU_SEPARATOR);
-        tinysh_printf("Showing items %d-%d of %d\r\n", 
+        apply_theme(THEME_FOOTER);
+        tinysh_printf("Showing items %d-%d of %d",
                      menu_state.scroll_offset + 1,
                      menu_state.scroll_offset + MENU_DISPLAY_ITEMS > menu->item_count ?
                          menu->item_count : menu_state.scroll_offset + MENU_DISPLAY_ITEMS,
                      menu->item_count);
+        reset_theme();
+        tinysh_printf("\r\n%s\r\n", MENU_SEPARATOR);
     }
-    
-    tinysh_printf("%s\r\n",MENU_SEPARATOR);
 }
 
 /**
@@ -393,13 +445,23 @@ static void start_argument_collection(char *title, char *param_desc, void (*func
     arg_title = title;
     arg_param_desc = param_desc;
     
-    // Display the prompt
+    // Display the prompt with colors
     clear_screen();
-    tinysh_printf("Function: %s\r\n\n", title);
+    apply_theme(THEME_TITLE);
+    tinysh_printf("Function: %s", title);
+    reset_theme();
+    tinysh_printf("\r\n\n");
+
     if (param_desc && *param_desc) {
-        tinysh_printf("Parameters: %s\r\n\n", param_desc);
+        apply_theme(THEME_HEADER);
+        tinysh_printf("Parameters: %s", param_desc);
+        reset_theme();
+        tinysh_printf("\r\n\n");
     }
+
+    apply_theme(THEME_PROMPT);
     tinysh_printf("Enter arguments: ");
+    reset_theme();
 }
 
 /**
@@ -412,22 +474,22 @@ static int handle_argument_input(char c) {
         // End of input - process arguments
         tinysh_printf("\r\n");
         
-        // Tokenize the input
+        // Tokenize the user-entered arguments
         char *user_args[MAX_ARGS-1];  // Leave room for command name
         int user_argc = tinysh_tokenize(arg_buffer, ' ', user_args, MAX_ARGS-1);
-        
-        // Prepare the complete argument vector with command name as first argument
+
+        // Create complete argument array with command name as first argument
         char *args[MAX_ARGS];
-        args[0] = arg_title;  // Command name as first argument
-        
-        // Copy user arguments
-        int i;
-        for (i = 0; i < user_argc && i < MAX_ARGS-1; i++) {
+        args[0] = arg_title;  // Command name as argv[0]
+
+        // Copy user arguments to positions 1 and beyond
+        for (int i = 0; i < user_argc && i < MAX_ARGS-1; i++) {
             args[i+1] = user_args[i];
         }
-        int argc = user_argc + 1;  // Add 1 for the command name
         
-        // Call function with complete argument set
+        // Total argument count is user arguments plus command name
+        int argc = user_argc + 1;
+
         if (pending_function_arg) {
             pending_function_arg(argc, args);
         }
@@ -471,45 +533,17 @@ static void prompt_for_arguments(char *title, char *param_desc, void (*function_
  * Execute a menu item action
  */
 static void execute_menu_item(tinysh_menu_item_t *item) {
-    if (!item) {
-        return;
-    }
-    
+    if (!item) return;
+
     // Handle Back item
     if (item->type & MENU_ITEM_BACK) {
         tinysh_menu_go_back();
         return;
     }
-    
+
     // Handle Exit item
     if (item->type & MENU_ITEM_EXIT) {
         tinysh_menu_exit();
-        return;
-    }
-    
-    // Handle submenu navigation - make sure basic submenu works
-    if (item->type & MENU_ITEM_SUBMENU && !(item->type & MENU_ITEM_CMD_REF)) {
-        // Push menu to stack and navigate
-        if (item->submenu && menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
-            // Save current index to stack
-            menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
-            
-            // Push new menu to stack
-            menu_state.menu_stack_idx++;
-            menu_state.menu_stack[menu_state.menu_stack_idx] = item->submenu;
-            menu_state.index_stack[menu_state.menu_stack_idx] = 0;
-            
-            // Update current state
-            menu_state.current_menu = item->submenu;
-            menu_state.current_index = 0;
-            menu_state.scroll_offset = 0;
-            
-            // Show the menu
-            tinysh_menu_display();
-        } else {
-            tinysh_printf("\r\nError: No submenu or stack full\r\n");
-            waiting_for_keypress = 1;
-        }
         return;
     }
     
@@ -517,131 +551,153 @@ static void execute_menu_item(tinysh_menu_item_t *item) {
     if (item->type & MENU_ITEM_CMD_REF) {
         tinysh_cmd_t *cmd = item->cmd;
         
-        if (!cmd) {
-            tinysh_printf("\r\nError: NULL command reference\r\n");
-            waiting_for_keypress = 1;
-            return;
-        }
-        
-        // Handle submenu navigation for commands with children
+        if (!cmd) return;
+
         if (item->type & MENU_ITEM_SUBMENU) {
-            // Create a submenu for this command's children
+            // Handle submenu case - create submenu on demand
             if (submenu_count < MAX_CMD_SUBMENUS) {
                 tinysh_menu_t *submenu = &cmd_submenus[submenu_count];
                 memset(submenu, 0, sizeof(tinysh_menu_t));
-                
-                // Set the submenu title
-                snprintf(submenu_titles[submenu_count], 
-                        sizeof(submenu_titles[0]), 
+
+                // Set submenu title
+                snprintf(submenu_titles[submenu_count],
+                        sizeof(submenu_titles[0]),
                         "%s Commands", cmd->name);
                 submenu->title = submenu_titles[submenu_count];
-                
+
                 // Create menu items for child commands
                 tinysh_cmd_t *child = cmd->child;
                 int child_count = 0;
-                
+
                 while (child && child_count < MENU_MAX_ITEMS - 1) {
                     if (child->name) {
                         submenu->items[child_count].title = child->name;
                         submenu->items[child_count].type = MENU_ITEM_CMD_REF;
                         submenu->items[child_count].cmd = child;
-                        
+
                         #if AUTHENTICATION_ENABLED
                         if (tinysh_is_admin_command(child)) {
                             submenu->items[child_count].type |= MENU_ITEM_ADMIN;
                         }
                         #endif
-                        
+
                         child_count++;
                     }
                     child = child->next;
                 }
-                
+
                 // Add back button
                 submenu->items[child_count].title = "Back";
                 submenu->items[child_count].type = MENU_ITEM_BACK;
                 submenu->item_count = (unsigned char)(child_count + 1);
                 submenu->parent_index = 0;
-                
-                // Navigate to this submenu
-                if (menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
-                    // Save current index
-                    menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
-                    
-                    // Push new menu to stack
-                    menu_state.menu_stack_idx++;
-                    menu_state.menu_stack[menu_state.menu_stack_idx] = submenu;
-                    menu_state.index_stack[menu_state.menu_stack_idx] = 0;
-                    
-                    // Update current state
-                    menu_state.current_menu = submenu;
-                    menu_state.current_index = 0;
-                    menu_state.scroll_offset = 0;
-                    
-                    // Show the submenu
-                    tinysh_menu_display();
-                    submenu_count++;
-                    return;
-                }
+
+                // Navigate to submenu
+                menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
+                menu_state.menu_stack_idx++;
+                menu_state.menu_stack[menu_state.menu_stack_idx] = submenu;
+                menu_state.current_menu = submenu;
+                menu_state.current_index = 0;
+                menu_state.scroll_offset = 0;
+
+                submenu_count++;
+                tinysh_menu_display();
             }
-        } 
-        else {
-            // Execute a regular command
+        } else {
+            // Direct command execution
             if (cmd->function) {
                 // Check if command expects arguments (has usage info)
                 if (cmd->usage && strcmp(cmd->usage, _NOARG_) != 0) {
                     // Command requires arguments - prompt for them
-                    prompt_for_arguments(cmd->name, cmd->usage, 
+                    prompt_for_arguments(cmd->name, cmd->usage,
                                        (void (*)(int, char**))cmd->function);
-                    return;
                 } else {
                     // No arguments required - execute directly
                     // Save menu mode state
                     char was_in_menu = in_menu_mode;
-                    
+
                     // Temporarily exit menu mode for command execution
                     in_menu_mode = 0;
-                    
+
                     // Execute the command directly
                     char *argv[1] = {cmd->name};
                     cmd->function(1, argv);
-                    
+
                     // Restore menu mode
                     in_menu_mode = was_in_menu;
-                    
+
                     // Wait for user acknowledgment
                     tinysh_printf("\r\nPress any key to return to menu...");
                     waiting_for_keypress = 1;
                 }
             }
-            return;
         }
+        return;
     }
-    
+
+    // Handle submenu navigation
+    if (item->type & MENU_ITEM_SUBMENU) {
+        // Push menu to stack and navigate
+        if (item->submenu && menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
+            menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
+            menu_state.menu_stack_idx++;
+            menu_state.menu_stack[menu_state.menu_stack_idx] = item->submenu;
+            menu_state.current_menu = item->submenu;
+            menu_state.current_index = 0;
+            menu_state.scroll_offset = 0;
+
+            tinysh_menu_display();
+        }
+        return;
+    }
+
     // Handle function calls
     if (item->type & MENU_ITEM_FUNCTION) {
         if (item->function) {
             item->function();
-        } else {
-            tinysh_printf("\r\nError: NULL function pointer\r\n");
+
+            // Wait for keypress to return to menu
+            tinysh_printf("\r\nPress any key to return to menu...");
             waiting_for_keypress = 1;
         }
         return;
     }
-    
+
     // Handle function with arguments
     if (item->type & MENU_ITEM_FUNCTION_ARG) {
         if (item->function_arg) {
             prompt_for_arguments(item->title, item->params, item->function_arg);
-        } else {
-            tinysh_printf("\r\nError: NULL function_arg pointer\r\n");
+        }
+        return;
+    }
+
+    // Handle shell command execution
+    if (item->type & MENU_ITEM_COMMAND) {
+        if (item->command) {
+            // Temporarily exit menu mode
+            in_menu_mode = 0;
+
+            // Execute the command via the shell
+            tinysh_char_in('\r'); // Clear current line
+
+            // Type the command
+            char *cmd = item->command;
+            while (*cmd) {
+                tinysh_char_in(*cmd++);
+            }
+
+            // Execute it
+            tinysh_char_in('\r');
+
+            // Return to menu mode
+            in_menu_mode = 1;
+
+            // Wait for keypress
+            tinysh_printf("\r\nPress any key to return to menu...");
             waiting_for_keypress = 1;
         }
         return;
     }
-    
-    // If we get here, we didn't handle the item type
-    waiting_for_keypress = 1;
 }
 
 /**
@@ -703,12 +759,12 @@ int tinysh_menu_hook(char c) {
  */
 tinysh_menu_t* tinysh_generate_cmd_menu(void) {
     tinysh_cmd_t *root = tinysh_get_root_cmd();
-    
+
     // Reset menu structure (reuse the same structure)
     memset(&cmd_menu, 0, sizeof(cmd_menu));
     cmd_menu.title = "Shell Commands";
     cmd_menu.parent_index = 0;
-    
+
     int count = 0;
     submenu_count = 0;  // Reset the global submenu_count
     
@@ -716,22 +772,22 @@ tinysh_menu_t* tinysh_generate_cmd_menu(void) {
     tinysh_cmd_t *cmd = root;
     while (cmd && count < MAX_CMD_MENU_ITEMS) {
         // Skip special commands and NULL names
-        if (!cmd->name || 
-            strcmp(cmd->name, "menu") == 0 || 
-            strcmp(cmd->name, "quit") == 0 || 
+        if (!cmd->name ||
+            strcmp(cmd->name, "menu") == 0 ||
+            strcmp(cmd->name, "quit") == 0 ||
             strcmp(cmd->name, "menutest") == 0) {
             cmd = cmd->next;
             continue;
         }
-        
+
         // Set up menu item with direct reference
         unsigned char item_type = MENU_ITEM_CMD_REF;
-        
+
         // Check if command has children - create submenu reference
         if (cmd->child) {
             item_type |= MENU_ITEM_SUBMENU;
         }
-        
+
         #if AUTHENTICATION_ENABLED
         if (tinysh_is_admin_command(cmd)) {
             item_type |= MENU_ITEM_ADMIN;
@@ -742,12 +798,10 @@ tinysh_menu_t* tinysh_generate_cmd_menu(void) {
         cmd_menu.items[count].title = cmd->name;
         cmd_menu.items[count].type = item_type;
         cmd_menu.items[count].cmd = cmd;
-        
+
         count++;
         cmd = cmd->next;
     }
-    
-    tinysh_printf("Found %d commands for menu\r\n", count);
     
     // Add back button
     if (count < MAX_CMD_MENU_ITEMS) {
