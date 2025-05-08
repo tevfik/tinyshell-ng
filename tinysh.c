@@ -396,7 +396,20 @@ void display_child_help(tinysh_cmd_t *cmd)
     if(cm->help)
       {
         int i;
+        
+        // Add asterisk indicator for admin commands
+#if AUTHENTICATION_ENABLED
+        if (tinysh_is_admin_command(cm)) {
+            tinysh_puts("* ");  // Add admin indicator
+        } else {
+            tinysh_puts("  ");  // Add spacing for alignment
+        }
+#else
+        tinysh_puts("  ");      // Always add spacing when auth is disabled
+#endif
+        
         tinysh_puts(cm->name);
+        // Adjust padding to maintain alignment with the indicators
         for(i=tinysh_strlen(cm->name);i<len+2;i++)
           tinysh_char_out(' ');
         tinysh_puts(cm->help);
@@ -988,6 +1001,13 @@ void tinysh_reset_context(void) {
     cur_context = 0;
     cur_cmd_ctx = 0;
     context_buffer[0] = 0;
+}
+
+/**
+ * Get the root command
+ */
+tinysh_cmd_t *tinysh_get_root_cmd(void) {
+    return root_cmd;
 }
 
 #if !AUTHENTICATION_ENABLED

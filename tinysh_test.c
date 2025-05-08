@@ -394,7 +394,7 @@ void test_auth_handler(int argc, char **argv) {
                 !tinysh_is_admin_command(&normal_cmd),
                 "Normal command incorrectly flagged as admin");
     
-    tinysh_cmd_t admin_cmd = TINYSH_ADMIN_CMD(0, "admin", "admin", _NOARG_, NULL, 0);
+    tinysh_cmd_t admin_cmd = TINYSH_ADMIN_CMD(0, "admin", "admin", _NOARG_, NULL, 0, 0, 0);
     test_assert("Admin command", 
                 tinysh_is_admin_command(&admin_cmd),
                 "Admin command not properly flagged");

@@ -70,6 +70,7 @@
 #define MENU_ITEM_BACK        0x10   // Special "back" item
 #define MENU_ITEM_EXIT        0x20   // Exit menu mode
 #define MENU_ITEM_FUNCTION_ARG 0x40  // Function with arguments
+#define MENU_ITEM_CMD_REF     0x80   // Direct reference to tinysh_cmd_t
 
 /* Menu navigation keys */
 #define MENU_KEY_UP           'A'    // Up arrow (ANSI escape sequence)
@@ -115,6 +116,11 @@ typedef struct {
         struct {
             void (*function_arg)(int argc, char **argv);  // Function with arguments
             char *params;           // Parameter string description "param1 param2..."
+        };
+
+        // For direct command reference items (MENU_ITEM_CMD_REF)
+        struct {
+            tinysh_cmd_t *cmd;         // Direct reference to command
         };
     };
 } tinysh_menu_item_t;

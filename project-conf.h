@@ -51,6 +51,8 @@
 #define MENU_MAX_DEPTH            5  // Maximum nesting level of menus
 #define MENU_MAX_ITEMS            10 // Maximum items per menu level
 #define MENU_DISPLAY_ITEMS        10  // Number of items to display at once
+#define MAX_CMD_MENU_ITEMS        100
+#define MAX_CMD_SUBMENUS          30
 #endif
 
 #endif /* PROJECT_CONF_H */

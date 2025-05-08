@@ -28,6 +28,12 @@ static void prompt_for_arguments(char *title, char *param_desc, void (*function_
 static void start_argument_collection(char *title, char *param_desc, void (*function_arg)(int argc, char **argv));
 static int handle_argument_input(char c); /* Keep return as int for compatibility */
 
+/* Forward variable declarations to ensure visibility */
+static tinysh_menu_t cmd_menu;
+static tinysh_menu_t cmd_submenus[MAX_CMD_SUBMENUS];
+static int submenu_count = 0;  
+static char submenu_titles[MAX_CMD_SUBMENUS][64];
+
 /* Menu command */
 tinysh_cmd_t menu_cmd = {
     0, "menu", "enter menu-based UI mode", 0, 
@@ -158,11 +164,14 @@ int tinysh_menu_process_char(char c) {
             escape_char_count = 0;
             return 1;
             
-        case MENU_KEY_ENTER:
+        case '\r': // CR
+        case '\n': // LF
+        case ' ':  // Space - alternative selection key
             tinysh_menu_execute_selection();
             return 1;
             
-        case MENU_KEY_BACK:
+        case MENU_KEY_BACK: // This is already 'q' from the header file
+        case 'Q':  // Just handle uppercase Q separately
             if (!tinysh_menu_go_back()) {
                 tinysh_menu_exit();
             }
@@ -175,6 +184,7 @@ int tinysh_menu_process_char(char c) {
                 if (index < menu_state.current_menu->item_count) {
                     menu_select_item((unsigned char)index);
                     tinysh_menu_display();
+                    tinysh_menu_execute_selection();
                 }
                 return 1;
             }
@@ -229,7 +239,9 @@ void tinysh_menu_execute_selection(void) {
     tinysh_menu_t *menu = menu_state.current_menu;
     tinysh_menu_item_t *item;
     
-    if (!menu || menu_state.current_index >= menu->item_count) return;
+    if (!menu || menu_state.current_index >= menu->item_count) {
+        return;
+    }
     
     item = &menu->items[menu_state.current_index];
     
@@ -400,10 +412,22 @@ static int handle_argument_input(char c) {
         // End of input - process arguments
         tinysh_printf("\r\n");
         
-        // Tokenize and call function
-        char *args[MAX_ARGS];
-        int argc = tinysh_tokenize(arg_buffer, ' ', args, MAX_ARGS);
+        // Tokenize the input
+        char *user_args[MAX_ARGS-1];  // Leave room for command name
+        int user_argc = tinysh_tokenize(arg_buffer, ' ', user_args, MAX_ARGS-1);
         
+        // Prepare the complete argument vector with command name as first argument
+        char *args[MAX_ARGS];
+        args[0] = arg_title;  // Command name as first argument
+        
+        // Copy user arguments
+        int i;
+        for (i = 0; i < user_argc && i < MAX_ARGS-1; i++) {
+            args[i+1] = user_args[i];
+        }
+        int argc = user_argc + 1;  // Add 1 for the command name
+        
+        // Call function with complete argument set
         if (pending_function_arg) {
             pending_function_arg(argc, args);
         }
@@ -447,91 +471,177 @@ static void prompt_for_arguments(char *title, char *param_desc, void (*function_
  * Execute a menu item action
  */
 static void execute_menu_item(tinysh_menu_item_t *item) {
-    if (!item) return;
+    if (!item) {
+        return;
+    }
     
-    /* Handle different item types */
-    if (item->type & MENU_ITEM_SUBMENU) {
-        /* Navigate to submenu */
-        if (!item->submenu) return;
-        
-        /* Push current menu to stack */
-        if (menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
+    // Handle Back item
+    if (item->type & MENU_ITEM_BACK) {
+        tinysh_menu_go_back();
+        return;
+    }
+    
+    // Handle Exit item
+    if (item->type & MENU_ITEM_EXIT) {
+        tinysh_menu_exit();
+        return;
+    }
+    
+    // Handle submenu navigation - make sure basic submenu works
+    if (item->type & MENU_ITEM_SUBMENU && !(item->type & MENU_ITEM_CMD_REF)) {
+        // Push menu to stack and navigate
+        if (item->submenu && menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
+            // Save current index to stack
+            menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
+            
+            // Push new menu to stack
             menu_state.menu_stack_idx++;
             menu_state.menu_stack[menu_state.menu_stack_idx] = item->submenu;
             menu_state.index_stack[menu_state.menu_stack_idx] = 0;
             
+            // Update current state
             menu_state.current_menu = item->submenu;
             menu_state.current_index = 0;
             menu_state.scroll_offset = 0;
             
+            // Show the menu
             tinysh_menu_display();
+        } else {
+            tinysh_printf("\r\nError: No submenu or stack full\r\n");
+            waiting_for_keypress = 1;
         }
+        return;
     }
-    else if (item->type & MENU_ITEM_FUNCTION_ARG) {
-        /* Call function handler with arguments */
-        if (item->function_arg) {
-            /* 
-             * For command menu items, we need to handle differently
-             * to ensure the command name is included in the arguments
-             */
-            if (item->function_arg == tinysh_menu_execute_command) {
-                /* This is for command execution from the menu */
-                /* Prompt for arguments and call function with command name */
-                prompt_for_arguments(item->title, item->params, item->function_arg);
-            } else {
-                /* Regular function with arguments */
-                prompt_for_arguments(item->title, item->params, item->function_arg);
+    
+    // Handle direct command references
+    if (item->type & MENU_ITEM_CMD_REF) {
+        tinysh_cmd_t *cmd = item->cmd;
+        
+        if (!cmd) {
+            tinysh_printf("\r\nError: NULL command reference\r\n");
+            waiting_for_keypress = 1;
+            return;
+        }
+        
+        // Handle submenu navigation for commands with children
+        if (item->type & MENU_ITEM_SUBMENU) {
+            // Create a submenu for this command's children
+            if (submenu_count < MAX_CMD_SUBMENUS) {
+                tinysh_menu_t *submenu = &cmd_submenus[submenu_count];
+                memset(submenu, 0, sizeof(tinysh_menu_t));
+                
+                // Set the submenu title
+                snprintf(submenu_titles[submenu_count], 
+                        sizeof(submenu_titles[0]), 
+                        "%s Commands", cmd->name);
+                submenu->title = submenu_titles[submenu_count];
+                
+                // Create menu items for child commands
+                tinysh_cmd_t *child = cmd->child;
+                int child_count = 0;
+                
+                while (child && child_count < MENU_MAX_ITEMS - 1) {
+                    if (child->name) {
+                        submenu->items[child_count].title = child->name;
+                        submenu->items[child_count].type = MENU_ITEM_CMD_REF;
+                        submenu->items[child_count].cmd = child;
+                        
+                        #if AUTHENTICATION_ENABLED
+                        if (tinysh_is_admin_command(child)) {
+                            submenu->items[child_count].type |= MENU_ITEM_ADMIN;
+                        }
+                        #endif
+                        
+                        child_count++;
+                    }
+                    child = child->next;
+                }
+                
+                // Add back button
+                submenu->items[child_count].title = "Back";
+                submenu->items[child_count].type = MENU_ITEM_BACK;
+                submenu->item_count = (unsigned char)(child_count + 1);
+                submenu->parent_index = 0;
+                
+                // Navigate to this submenu
+                if (menu_state.menu_stack_idx < MENU_MAX_DEPTH - 1) {
+                    // Save current index
+                    menu_state.index_stack[menu_state.menu_stack_idx] = menu_state.current_index;
+                    
+                    // Push new menu to stack
+                    menu_state.menu_stack_idx++;
+                    menu_state.menu_stack[menu_state.menu_stack_idx] = submenu;
+                    menu_state.index_stack[menu_state.menu_stack_idx] = 0;
+                    
+                    // Update current state
+                    menu_state.current_menu = submenu;
+                    menu_state.current_index = 0;
+                    menu_state.scroll_offset = 0;
+                    
+                    // Show the submenu
+                    tinysh_menu_display();
+                    submenu_count++;
+                    return;
+                }
             }
+        } 
+        else {
+            // Execute a regular command
+            if (cmd->function) {
+                // Check if command expects arguments (has usage info)
+                if (cmd->usage && strcmp(cmd->usage, _NOARG_) != 0) {
+                    // Command requires arguments - prompt for them
+                    prompt_for_arguments(cmd->name, cmd->usage, 
+                                       (void (*)(int, char**))cmd->function);
+                    return;
+                } else {
+                    // No arguments required - execute directly
+                    // Save menu mode state
+                    char was_in_menu = in_menu_mode;
+                    
+                    // Temporarily exit menu mode for command execution
+                    in_menu_mode = 0;
+                    
+                    // Execute the command directly
+                    char *argv[1] = {cmd->name};
+                    cmd->function(1, argv);
+                    
+                    // Restore menu mode
+                    in_menu_mode = was_in_menu;
+                    
+                    // Wait for user acknowledgment
+                    tinysh_printf("\r\nPress any key to return to menu...");
+                    waiting_for_keypress = 1;
+                }
+            }
+            return;
         }
     }
-    else if (item->type & MENU_ITEM_FUNCTION) {
-        /* Call function handler */
+    
+    // Handle function calls
+    if (item->type & MENU_ITEM_FUNCTION) {
         if (item->function) {
-            /* Temporarily exit menu display */
-            clear_screen();
-            tinysh_printf("Executing %s...\r\n\n", item->title);
-            
-            /* Call the function */
             item->function();
-            
-            /* Wait for user acknowledgment */
-            tinysh_printf("\r\n\nPress any key to return to menu...");
-            waiting_for_keypress = 1; // Set waiting state flag
+        } else {
+            tinysh_printf("\r\nError: NULL function pointer\r\n");
+            waiting_for_keypress = 1;
         }
+        return;
     }
-    else if (item->type & MENU_ITEM_COMMAND) {
-        /* Execute shell command */
-        if (item->command) {
-            /* Temporarily exit menu display */
-            clear_screen();
-            tinysh_printf("Executing command: %s\r\n\n", item->command);
-            
-            /* Exit menu mode to allow command execution */
-            in_menu_mode = 0;
-            
-            /* Feed command to shell character by character */
-            char *cmd = item->command;
-            while (*cmd) {
-                tinysh_char_in(*cmd++);
-            }
-            tinysh_char_in('\r');
-            
-            /* Return to menu mode */
-            in_menu_mode = 1;
-            
-            /* Wait for user acknowledgment */
-            tinysh_printf("\r\n\nPress any key to return to menu...");
-            waiting_for_keypress = 1; // Set waiting state flag
+    
+    // Handle function with arguments
+    if (item->type & MENU_ITEM_FUNCTION_ARG) {
+        if (item->function_arg) {
+            prompt_for_arguments(item->title, item->params, item->function_arg);
+        } else {
+            tinysh_printf("\r\nError: NULL function_arg pointer\r\n");
+            waiting_for_keypress = 1;
         }
+        return;
     }
-    else if (item->type & MENU_ITEM_BACK) {
-        /* Go back to parent menu */
-        tinysh_menu_go_back();
-    }
-    else if (item->type & MENU_ITEM_EXIT) {
-        /* Exit menu mode */
-        tinysh_menu_exit();
-    }
+    
+    // If we get here, we didn't handle the item type
+    waiting_for_keypress = 1;
 }
 
 /**
@@ -587,9 +697,69 @@ int tinysh_menu_hook(char c) {
     return 0;
 }
 
-/* Command menu implementation with hierarchical support */
-#define MAX_CMD_MENU_ITEMS 50  // Increased from 30
-#define MAX_CMD_SUBMENUS 20    // Increased from 10
+/**
+ * Generate menu of all registered commands
+ * Uses direct references to tinyshell command structures
+ */
+tinysh_menu_t* tinysh_generate_cmd_menu(void) {
+    tinysh_cmd_t *root = tinysh_get_root_cmd();
+    
+    // Reset menu structure (reuse the same structure)
+    memset(&cmd_menu, 0, sizeof(cmd_menu));
+    cmd_menu.title = "Shell Commands";
+    cmd_menu.parent_index = 0;
+    
+    int count = 0;
+    submenu_count = 0;  // Reset the global submenu_count
+    
+    // First pass: count top-level commands and initialize
+    tinysh_cmd_t *cmd = root;
+    while (cmd && count < MAX_CMD_MENU_ITEMS) {
+        // Skip special commands and NULL names
+        if (!cmd->name || 
+            strcmp(cmd->name, "menu") == 0 || 
+            strcmp(cmd->name, "quit") == 0 || 
+            strcmp(cmd->name, "menutest") == 0) {
+            cmd = cmd->next;
+            continue;
+        }
+        
+        // Set up menu item with direct reference
+        unsigned char item_type = MENU_ITEM_CMD_REF;
+        
+        // Check if command has children - create submenu reference
+        if (cmd->child) {
+            item_type |= MENU_ITEM_SUBMENU;
+        }
+        
+        #if AUTHENTICATION_ENABLED
+        if (tinysh_is_admin_command(cmd)) {
+            item_type |= MENU_ITEM_ADMIN;
+        }
+        #endif
+        
+        // Add to menu using direct reference - no string duplication
+        cmd_menu.items[count].title = cmd->name;
+        cmd_menu.items[count].type = item_type;
+        cmd_menu.items[count].cmd = cmd;
+        
+        count++;
+        cmd = cmd->next;
+    }
+    
+    tinysh_printf("Found %d commands for menu\r\n", count);
+    
+    // Add back button
+    if (count < MAX_CMD_MENU_ITEMS) {
+        cmd_menu.items[count].title = "Back to Main Menu";
+        cmd_menu.items[count].type = MENU_ITEM_BACK;
+        cmd_menu.item_count = (unsigned char)(count + 1);
+    } else {
+        cmd_menu.item_count = MAX_CMD_MENU_ITEMS;
+    }
+    
+    return &cmd_menu;
+}
 
 /* Storage for command menu and submenus */
 static tinysh_menu_t cmd_menu = {
@@ -598,285 +768,3 @@ static tinysh_menu_t cmd_menu = {
     0,        // Item count will be set during initialization
     0         // Parent index
 };
-
-/* Storage for command submenus (like "test" commands) */
-static tinysh_menu_t cmd_submenus[MAX_CMD_SUBMENUS];
-
-/* Array to store command references for menu items */
-static tinysh_cmd_t *cmd_references[MAX_CMD_MENU_ITEMS];
-
-/* Create a static array for submenu titles to avoid memory leaks from strdup() */
-static char submenu_titles[MAX_CMD_SUBMENUS][64];
-
-/* Add this variable to track if we hit limits */
-static char menu_generation_truncated = 0;  /* Changed from uint8_t to char */
-
-/**
- * Execute a shell command from the menu system
- */
-void tinysh_menu_execute_command(int argc, char **argv) {
-    // Get command name from the calling menu item's title or first arg
-    char *cmd_name = NULL;
-    
-    // Check if we're executing a child command (submenu item)
-    if (argc > 0 && strstr(argv[0], " ")) {
-        // This is a child command with format "parent child"
-        cmd_name = argv[0];
-    } else {
-        // Standard command from menu title
-        tinysh_menu_t *menu = menu_state.current_menu;
-        if (menu) {
-            cmd_name = menu->items[menu_state.current_index].title;
-        }
-    }
-    
-    if (!cmd_name) {
-        tinysh_printf("Error: Could not determine command name\r\n");
-        return;
-    }
-    
-    // Special case for quit command - handle directly to avoid segfault
-    if (strcmp(cmd_name, "quit") == 0) {
-        tinysh_printf("Exiting TinyShell...\r\n");
-        tinyshell_active = 0;
-        tinysh_menu_exit();
-        return;
-    }
-    
-    // Two different command execution paths depending on if this is a child command
-    tinysh_cmd_t *cmd = NULL;
-    char parent_name[32] = {0};
-    char child_name[32] = {0};
-    
-    if (strstr(cmd_name, " ")) {
-        // Parse "parent child" format
-        char *space = strstr(cmd_name, " ");
-        strncpy(parent_name, cmd_name, (size_t)(space - cmd_name));
-        strcpy(child_name, space + 1);
-        
-        // Find parent command
-        tinysh_cmd_t *parent_cmd = NULL;
-        for (int i = 0; i < MAX_CMD_MENU_ITEMS && cmd_references[i]; i++) {
-            if (strcmp(cmd_references[i]->name, parent_name) == 0) {
-                parent_cmd = cmd_references[i];
-                break;
-            }
-        }
-        
-        // Find child command
-        if (parent_cmd && parent_cmd->child) {
-            cmd = parent_cmd->child;
-            while (cmd) {
-                if (strcmp(cmd->name, child_name) == 0) {
-                    break;
-                }
-                cmd = cmd->next;
-            }
-        }
-    } else {
-        // Standard command lookup
-        for (int i = 0; i < MAX_CMD_MENU_ITEMS && cmd_references[i]; i++) {
-            if (strcmp(cmd_references[i]->name, cmd_name) == 0) {
-                cmd = cmd_references[i];
-                break;
-            }
-        }
-    }
-    
-    if (!cmd) {
-        tinysh_printf("Error: Command '%s' not found\r\n",cmd_name);
-        return;
-    }
-    
-#if AUTHENTICATION_ENABLED
-    // Check admin rights
-    if (tinysh_is_admin_command(cmd) && tinysh_get_auth_level() < TINYSH_AUTH_ADMIN) {
-        tinysh_printf("Error: Command requires admin privileges\r\n");
-        tinysh_printf("Use 'auth <password>' to authenticate\r\n");
-        return;
-    }
-#endif
-    
-    // Get argument and call function
-    void *arg = cmd->arg;
-#if AUTHENTICATION_ENABLED
-    if (tinysh_is_admin_command(cmd)) {
-        arg = tinysh_get_real_arg(cmd);
-    }
-#endif
-    
-    if (cmd->function) {
-        // Create new argv array with proper command name as first element
-        char *new_argv[MAX_ARGS + 1];
-        
-        if (child_name[0]) {
-            // This is a child command call, use child name as argv[0]
-            new_argv[0] = child_name;
-        } else {
-            // Standard command, use the command name
-            new_argv[0] = cmd_name;
-        }
-        
-        // Copy user arguments to positions 1 onwards
-        int new_argc = 1;  // Start with 1 for the command name
-        for (int i = 0; i < argc && new_argc < MAX_ARGS + 1; i++) {
-            new_argv[new_argc++] = argv[i];
-        }
-        
-        // Save original arg and execute command
-        void *original_arg = cmd->arg;
-        cmd->arg = arg;
-        
-        cmd->function(new_argc, new_argv);
-        
-        // Restore original arg
-        cmd->arg = original_arg;
-    }
-}
-
-/**
- * Generate menu of all registered commands
- */
-tinysh_menu_t* tinysh_generate_cmd_menu(void) {
-    // Start with help_cmd which is the first in the linked list
-    extern tinysh_cmd_t help_cmd; 
-    tinysh_cmd_t *cmd = &help_cmd;
-    int count = 0;
-    int submenu_count = 0;
-    
-    // Reset the truncation flag
-    menu_generation_truncated = 0;
-    
-    memset(cmd_references, 0, sizeof(cmd_references));
-    
-    // First pass: find top-level commands and create menu items
-    while (cmd && count < MAX_CMD_MENU_ITEMS) {
-        // Skip special commands and ensure command name is valid
-        if (cmd->name && strcmp(cmd->name, "menu") != 0 && 
-            strcmp(cmd->name, "quit") != 0 &&
-            strcmp(cmd->name, "menutest") != 0) {
-            
-            // Store command reference
-            cmd_references[count] = cmd;
-            
-            // Check if this command has children
-            if (cmd->child) {
-                // This is a parent command - create a submenu
-                if (submenu_count < MAX_CMD_SUBMENUS) {
-                    // Set up submenu item
-                    cmd_menu.items[count].title = cmd->name;
-                    cmd_menu.items[count].type = MENU_ITEM_SUBMENU;
-                    
-                    // Create submenu for this command's children
-                    tinysh_menu_t *submenu = &cmd_submenus[submenu_count];
-                    memset(submenu, 0, sizeof(tinysh_menu_t)); 
-                    
-                    char submenu_title[32] = {0};
-                    snprintf(submenu_title, sizeof(submenu_title), "%s Commands", cmd->name);
-                    
-                    // Use static array for submenu titles
-                    strncpy(submenu_titles[submenu_count], submenu_title, sizeof(submenu_titles[0])-1);
-                    submenu_titles[submenu_count][sizeof(submenu_titles[0])-1] = '\0';
-                    submenu->title = submenu_titles[submenu_count];
-                    
-                    // Link submenu to menu item
-                    cmd_menu.items[count].submenu = submenu;
-                    
-                    // Add child commands to submenu
-                    tinysh_cmd_t *child = cmd->child;
-                    int child_count = 0;
-                    
-                    while (child && child_count < MENU_MAX_ITEMS - 1) {
-                        // Skip NULL names
-                        if (!child->name) {
-                            child = child->next;
-                            continue;
-                        }
-                        
-                        // Create combined name for proper execution
-                        char full_name[64] = {0};
-                        
-                        // Use snprintf to safely handle potential buffer overflow
-                        if (snprintf(full_name, sizeof(full_name), "%s %s", cmd->name, child->name) >= 0) {
-                            // Create storage for child command names - use static allocated memory 
-                            // but ensure we don't exceed array bounds
-                            if (child_count < MENU_MAX_ITEMS) {
-                                static char cmd_names[MENU_MAX_ITEMS][64];
-                                snprintf(cmd_names[child_count], sizeof(cmd_names[0]), "%s", full_name);
-                                
-                                // Set the menu item title to our static storage
-                                submenu->items[child_count].title = cmd_names[child_count];
-                                submenu->items[child_count].type = MENU_ITEM_FUNCTION_ARG;
-                                submenu->items[child_count].function_arg = tinysh_menu_execute_command;
-                                submenu->items[child_count].params = child->usage ? child->usage : "";
-                            } else {
-                                menu_generation_truncated = 1;
-                            }
-                        }
-                        
-                        child = child->next;
-                        child_count++;
-                    }
-                    
-                    // Add back item
-                    if (child_count < MENU_MAX_ITEMS) {
-                        submenu->items[child_count].title = "Back to Commands";
-                        submenu->items[child_count].type = MENU_ITEM_BACK;
-                        submenu->items[child_count].submenu = NULL;
-                        
-                        // Set submenu item count
-                        submenu->item_count = (uint8_t)(child_count + 1);
-                    } else {
-                        submenu->item_count = MENU_MAX_ITEMS;
-                        menu_generation_truncated = 1;
-                    }
-                    
-                    submenu->parent_index = 0;
-                    
-                    submenu_count++;
-                } else {
-                    // Fallback to standard menu item if we're out of submenu slots
-                    cmd_menu.items[count].title = cmd->name;
-                    cmd_menu.items[count].type = MENU_ITEM_FUNCTION_ARG;
-                    cmd_menu.items[count].function_arg = tinysh_menu_execute_command;
-                    cmd_menu.items[count].params = cmd->usage ? cmd->usage : "";
-                    menu_generation_truncated = 1;
-                }
-            } else {
-                // Standard command without children
-                cmd_menu.items[count].title = cmd->name;
-                cmd_menu.items[count].type = MENU_ITEM_FUNCTION_ARG;
-                cmd_menu.items[count].function_arg = tinysh_menu_execute_command;
-                cmd_menu.items[count].params = cmd->usage ? cmd->usage : "";
-            }
-            
-            count++;
-        }
-        
-        cmd = cmd->next;
-    }
-    
-    // Check if we hit the limit - flag a warning
-    if (cmd != NULL && count >= MAX_CMD_MENU_ITEMS) {
-        menu_generation_truncated = 1;
-    }
-    
-    // Add back menu item
-    if (count < MAX_CMD_MENU_ITEMS) {
-        cmd_menu.items[count].title = "Back to Main Menu";
-        cmd_menu.items[count].type = MENU_ITEM_BACK;
-        cmd_menu.items[count].submenu = NULL;
-        
-        // Set total count
-        cmd_menu.item_count = (uint8_t)(count + 1);
-        
-        // Add a notification if we truncated the menu
-        if (menu_generation_truncated && count + 1 < MAX_CMD_MENU_ITEMS) {
-            cmd_menu.items[count+1].title = "[Some commands not shown]";
-            cmd_menu.items[count+1].type = MENU_ITEM_NORMAL;
-            cmd_menu.item_count = (uint8_t)(count + 2);
-        }
-    }
-    
-    return &cmd_menu;
-}

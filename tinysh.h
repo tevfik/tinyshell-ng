@@ -131,9 +131,9 @@ void auth_cmd_handler(int argc, char **argv);
 #define TINYSH_CMD_ADMIN          0x80U
 
 /* Helper macro to create admin command */
-#define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg) \
+#define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg, next, prev) \
     { parent, name, help, usage, function, \
-      (void*)(((uintptr_t)(arg)) | (TINYSH_CMD_ADMIN << 24)), 0, 0 }
+      (void*)(((uintptr_t)(arg)) | (TINYSH_CMD_ADMIN << 24)), next, prev}
 
 /* Non-invasive way to check if a command requires admin rights */
 static inline unsigned char tinysh_is_admin_command(tinysh_cmd_t *cmd) {
@@ -146,8 +146,12 @@ static inline void* tinysh_get_real_arg(tinysh_cmd_t *cmd) {
 }
 #else
 /* Stub versions when authentication is disabled */
-#define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg) \
-    { parent, name, help, usage, function, arg, 0, 0 }
+#define TINYSH_ADMIN_CMD(parent, name, help, usage, function, arg, next, prev) \
+    { parent, name, help, usage, function, arg, next, prev}
+
+unsigned char tinysh_get_auth_level(void);
+void tinysh_set_auth_level(unsigned char level);
+unsigned char tinysh_verify_password(const char *password);
 
 static inline unsigned char tinysh_is_admin_command(tinysh_cmd_t *cmd) {
     (void)cmd;  // Prevent unused parameter warning
@@ -199,5 +203,7 @@ char* tinysh_float2str(float f, int precision);
 int tinysh_strlen(char *s);
 
 char is_tinyshell_active(void);
+
+tinysh_cmd_t *tinysh_get_root_cmd(void);
 
 #endif // TINYSH_H_

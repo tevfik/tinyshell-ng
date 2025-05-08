@@ -26,9 +26,6 @@
 
 #include "tinysh_menu.h"
 #include "tinysh.h"
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h> 
 
 /* Forward declarations of menu functions */
 static void show_system_info(void);

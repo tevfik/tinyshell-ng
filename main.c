@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
     // Example admin command
     tinysh_cmd_t reboot_cmd = TINYSH_ADMIN_CMD(
         0, "reboot", "reboot system (admin only)", _NOARG_, 
-        reboot_cmd_handler, (void*)0x12345678
+        reboot_cmd_handler, (void*)0x12345678, 0, 0
     );
     tinysh_add_command(&reboot_cmd);
 #else
