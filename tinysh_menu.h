@@ -140,7 +140,7 @@
  * Menu item structure
  */
 typedef struct {
-    char *title;                     // Display title
+    const char *title;               // Display title
     unsigned char type;              // Item type flags
     
     union {
@@ -151,7 +151,7 @@ typedef struct {
         
         // For command items (MENU_ITEM_COMMAND)
         struct {
-            char *command;           // Command to execute
+            const char *command;     // Command to execute
         };
         
         // For function items (MENU_ITEM_FUNCTION)
@@ -162,8 +162,8 @@ typedef struct {
         
         // For function items with arguments (MENU_ITEM_FUNCTION_ARG)
         struct {
-            void (*function_arg)(int argc, char **argv);  // Function with arguments
-            char *params;           // Parameter string description "param1 param2..."
+            void (*function_arg)(int argc, const char **argv);  // Function with arguments
+            const char *params;      // Parameter string description "param1 param2..."
         };
 
         // For direct command reference items (MENU_ITEM_CMD_REF)
@@ -177,7 +177,7 @@ typedef struct {
  * Menu structure
  */
 typedef struct tinysh_menu_t {
-    char *title;                     // Menu title
+    const char *title;               // Menu title
     tinysh_menu_item_t items[MENU_MAX_ITEMS];  // Menu items
     unsigned char item_count;        // Number of valid items
     unsigned char parent_index;      // Index in parent menu (-1 for root)
@@ -243,7 +243,7 @@ int tinysh_menu_go_back(void);
 /**
  * Command handler for entering menu mode
  */
-void menu_cmd_handler(int argc, char **argv);
+void menu_cmd_handler(int argc, const char **argv);
 
 /**
  * Hook function for main.c to integrate menu processing
@@ -269,6 +269,6 @@ tinysh_menu_t* tinysh_generate_cmd_menu(void);
  * @param argc Argument count including command name
  * @param argv Argument vector, argv[0] is command name
  */
-void tinysh_menu_execute_command(int argc, char **argv);
+void tinysh_menu_execute_command(int argc, const char **argv);
 
 #endif /* TINYSH_MENU_H */

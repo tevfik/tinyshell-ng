@@ -10,8 +10,8 @@
 static struct termios orig_termios; /* Original terminal settings */
 
 /* Forward declare command handlers */
-void cmd_sysinfo(int argc, char **argv);
-void cmd_echo(int argc, char **argv);
+void cmd_sysinfo(int argc, const char **argv);
+void cmd_echo(int argc, const char **argv);
 
 /**
  * Output a character to stdout
@@ -105,7 +105,7 @@ tinysh_cmd_t echo_cmd = {
 /**
  * Example command - print system info
  */
-void cmd_sysinfo(int argc, char **argv) {
+void cmd_sysinfo(int argc, const char **argv) {
     (void)argc; // Unused
     (void)argv; // Unused
     
@@ -118,7 +118,7 @@ void cmd_sysinfo(int argc, char **argv) {
 /**
  * Example command - echo arguments
  */
-void cmd_echo(int argc, char **argv) {
+void cmd_echo(int argc, const char **argv) {
     for (int i = 1; i < argc; i++) {
         tiny_port_printf("%s ", argv[i]);
     }

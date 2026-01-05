@@ -69,8 +69,8 @@ int tiny_port_printf(const char *fmt, ...);
 void tiny_port_setup(void);
 
 /* Command prototypes */
-void cmd_sysinfo(int argc, char **argv);
-void cmd_echo(int argc, char **argv);
+void cmd_sysinfo(int argc, const char **argv);
+void cmd_echo(int argc, const char **argv);
 
 /* Command structures */
 extern tinysh_cmd_t sysinfo_cmd;

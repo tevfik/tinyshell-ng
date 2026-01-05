@@ -91,12 +91,12 @@
 #define _NOARG_		                "[no-arg]"
 
 /* Command structure definition - MOVED UP to fix dependency issues */
-typedef void (*tinysh_fnt_t)(int argc, char **argv);
+typedef void (*tinysh_fnt_t)(int argc, const char **argv);
 typedef struct tinysh_cmd_t {
   struct tinysh_cmd_t *parent; /* 0 if top level command */
-  char *name;                  /* command input name, not 0 */
-  char *help;                  /* help string, can be 0 */
-  char *usage;                 /* usage string, can be 0 */
+  const char *name;            /* command input name, not 0 */
+  const char *help;            /* help string, can be 0 */
+  const char *usage;           /* usage string, can be 0 */
   tinysh_fnt_t function;       /* function to launch on cmd, can be 0 */
   void *arg;                   /* current argument when function called */
   struct tinysh_cmd_t *next;   /* must be set to 0 at init */
@@ -125,7 +125,7 @@ void tinysh_auth_init(void);
 unsigned char tinysh_verify_password(const char *password);
 void tinysh_set_auth_level(unsigned char level);
 unsigned char tinysh_get_auth_level(void);
-void auth_cmd_handler(int argc, char **argv);
+void auth_cmd_handler(int argc, const char **argv);
 
 /* Admin command flag - store in the highest bit of a byte in cmd struct */
 #define TINYSH_CMD_ADMIN          0x80U
@@ -181,13 +181,13 @@ extern tinysh_cmd_t help_cmd;
 extern tinysh_cmd_t quit_cmd;
 
 /* Built-in command handlers */
-void help_fnt(int argc, char **argv);
-void quit_fnt(int argc, char **argv);
+void help_fnt(int argc, const char **argv);
+void quit_fnt(int argc, const char **argv);
 
 /* Functions provided by the tinysh module */
 void tinysh_char_in(char c);
 void tinysh_add_command(tinysh_cmd_t *cmd);
-void tinysh_set_prompt(char *str);
+void tinysh_set_prompt(const char *str);
 void *tinysh_get_arg(void);
 
 /* Reset shell context to top level */
@@ -199,11 +199,14 @@ void tinysh_bin16_print(unsigned short v);
 void tinysh_bin32_print(int v);
 char *tinysh_strtok(char *s, const char *delim);
 int tinysh_tokenize(char *str, char token, char **vector, int max_arg);
-char* tinysh_float2str(float f, int precision);
-int tinysh_strlen(char *s);
+void tinysh_float2str(float f, char *str, int len, int precision);
+int tinysh_strlen(const char *s);
 
 char is_tinyshell_active(void);
 
 tinysh_cmd_t *tinysh_get_root_cmd(void);
+
+/* Exposed for testing */
+int help_command_line(tinysh_cmd_t *cmd, char *_str);
 
 #endif // TINYSH_H_

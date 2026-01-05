@@ -51,7 +51,7 @@ void sigint_handler(int sig) {
 /**
  * Example admin command handler for system reboot
  */
-void reboot_cmd_handler(int argc, char **argv) {
+void reboot_cmd_handler(int argc, const char **argv) {
     (void)argc; // Unused
     (void)argv; // Unused
     
@@ -92,8 +92,13 @@ int main(int argc, char *argv[]) {
             tiny_port_init();
             tiny_port_setup();
             tinysh_test_init();
+            
             tinysh_run_tests();
+            
+            #if MENU_ENABLED
             tinysh_menu_run_tests();
+            #endif
+            
             tiny_port_cleanup();
             return 0;
         }

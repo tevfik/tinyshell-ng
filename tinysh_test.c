@@ -10,20 +10,66 @@ static int tests_passed = 0;
 static int tests_failed = 0;
 static int verbose = 1;  // Default to verbose output
 
+/* Output Capture Buffer */
+#define CAPTURE_BUF_SIZE 1024
+static char capture_buffer[CAPTURE_BUF_SIZE];
+static int capture_index = 0;
+static int capture_enabled = 0;
+static void (*original_char_out)(unsigned char) = NULL;
+
 /* Forward declarations for test command handlers */
-void test_cmd_handler(int argc, char **argv);
-void test_run_handler(int argc, char **argv);
-void test_parser_handler(int argc, char **argv);
-void test_history_handler(int argc, char **argv);
-void test_commands_handler(int argc, char **argv);
-void test_tokenize_handler(int argc, char **argv);
-void test_conversion_handler(int argc, char **argv);
-void test_auth_handler(int argc, char **argv);
+void test_cmd_handler(int argc, const char **argv);
+void test_run_handler(int argc, const char **argv);
+void test_parser_handler(int argc, const char **argv);
+void test_history_handler(int argc, const char **argv);
+void test_commands_handler(int argc, const char **argv);
+void test_tokenize_handler(int argc, const char **argv);
+void test_conversion_handler(int argc, const char **argv);
+void test_auth_handler(int argc, const char **argv);
+void test_help_handler(int argc, const char **argv);
 
 /* Test helper functions */
 static void test_assert(const char *test_name, int condition, const char *message);
 static void test_section(const char *name);
 static void test_result_summary(void);
+
+/* Capture output character */
+static void capture_char_out(unsigned char c) {
+    if (capture_index < CAPTURE_BUF_SIZE - 1) {
+        capture_buffer[capture_index++] = c;
+        capture_buffer[capture_index] = 0;
+    }
+}
+
+void test_capture_start(void) {
+    if (!capture_enabled) {
+        capture_index = 0;
+        capture_buffer[0] = 0;
+        original_char_out = tinysh_char_out;
+        tinysh_out(capture_char_out);
+        capture_enabled = 1;
+    }
+}
+
+void test_capture_stop(void) {
+    if (capture_enabled) {
+        tinysh_out(original_char_out);
+        capture_enabled = 0;
+    }
+}
+
+const char* test_capture_get(void) {
+    return capture_buffer;
+}
+
+int test_capture_contains(const char *expected) {
+    return strstr(capture_buffer, expected) != NULL;
+}
+
+void test_capture_clear(void) {
+    capture_index = 0;
+    capture_buffer[0] = 0;
+}
 
 /* Test command definitions */
 tinysh_cmd_t test_cmd = {
@@ -66,6 +112,11 @@ tinysh_cmd_t test_auth_cmd = {
     test_auth_handler, 0, 0, 0
 };
 
+tinysh_cmd_t test_help_cmd = {
+    &test_cmd, "help", "Test help output", 0,
+    test_help_handler, 0, 0, 0
+};
+
 /**
  * Initialize TinyShell test framework 
  */
@@ -81,6 +132,7 @@ void tinysh_test_init(void) {
     tinysh_add_command(&test_tokenize_cmd);
     tinysh_add_command(&test_conversion_cmd);
     tinysh_add_command(&test_auth_cmd);
+    tinysh_add_command(&test_help_cmd);
     
     if (tinysh_printf) {
         tinysh_printf("TinyShell test framework initialized\r\n");
@@ -141,6 +193,7 @@ int tinysh_run_tests(void) {
     test_tokenize_handler(0, NULL);
     test_conversion_handler(0, NULL);
     test_auth_handler(0, NULL);  // This will handle both enabled and disabled authentication
+    test_help_handler(0, NULL);
     
     // Print summary
     test_result_summary();
@@ -151,7 +204,7 @@ int tinysh_run_tests(void) {
 /**
  * Main test command handler
  */
-void test_cmd_handler(int argc, char **argv) {
+void test_cmd_handler(int argc, const char **argv) {
     if (argc > 1 && strcmp(argv[1], "run") == 0) {
         tinysh_run_tests();
         return;
@@ -166,12 +219,13 @@ void test_cmd_handler(int argc, char **argv) {
     tinysh_printf("  test tokenize   - Test tokenization\r\n");
     tinysh_printf("  test conversion - Test number conversion\r\n");
     tinysh_printf("  test auth       - Test authentication\r\n");
+    tinysh_printf("  test help       - Test help output\r\n");
 }
 
 /**
  * Test run command handler
  */
-void test_run_handler(int argc, char **argv) {
+void test_run_handler(int argc, const char **argv) {
     // Check for verbose/quiet flags
     if (argc > 1) {
         if (strcmp(argv[1], "quiet") == 0) {
@@ -190,7 +244,7 @@ void test_run_handler(int argc, char **argv) {
 /**
  * Test parser functionality
  */
-void test_parser_handler(int argc, char **argv) {
+void test_parser_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -218,7 +272,7 @@ void test_parser_handler(int argc, char **argv) {
 /**
  * Test command history functionality
  */
-void test_history_handler(int argc, char **argv) {
+void test_history_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -234,28 +288,34 @@ void test_history_handler(int argc, char **argv) {
 /**
  * Test commands execution
  */
-void test_commands_handler(int argc, char **argv) {
+void test_commands_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
     test_section("Command Execution");
     
+    /* Guard against double-addition in interactive mode */
+    static int commands_added = 0;
+    
     // Test command addition
-    tinysh_cmd_t test_temp_cmd = {
+    // Must be static as they persist in the command list
+    static tinysh_cmd_t test_temp_cmd = {
         0, "temptest", "temporary test command", 0, 
         NULL, (void*)0x12345678, 0, 0
     };
     
-    tinysh_add_command(&test_temp_cmd);
-    
-    // Test arg retrieval - fix by using the function directly, not the variable
-    uint8_t flag = 1;
-    tinysh_cmd_t test_arg_cmd = {
+    // Test arg retrieval
+    static uint8_t flag = 1;
+    static tinysh_cmd_t test_arg_cmd = {
         0, "argtest", "argument test command", 0,
         NULL, &flag, 0, 0
     };
     
-    tinysh_add_command(&test_arg_cmd);
+    if (!commands_added) {
+        tinysh_add_command(&test_temp_cmd);
+        tinysh_add_command(&test_arg_cmd);
+        commands_added = 1;
+    }
     
     // We can't directly set tinysh_arg since it's static in tinysh.c
     // Instead, create a simple test that verifies command structure
@@ -274,7 +334,7 @@ void test_commands_handler(int argc, char **argv) {
 /**
  * Test tokenize function
  */
-void test_tokenize_handler(int argc, char **argv) {
+void test_tokenize_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -321,7 +381,7 @@ void test_tokenize_handler(int argc, char **argv) {
 /**
  * Test conversion functions
  */
-void test_conversion_handler(int argc, char **argv) {
+void test_conversion_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -343,17 +403,18 @@ void test_conversion_handler(int argc, char **argv) {
                "Should return 0 for invalid hex");
     
     // Test float2str
-    char *float_str = tinysh_float2str(123.456f, 2);
+    char float_str[30];
+    tinysh_float2str(123.456f, float_str, sizeof(float_str), 2);
     test_assert("Float to string", strcmp(float_str, "123.45") == 0,
                "Failed to convert float to string");
     
     // Test negative float
-    float_str = tinysh_float2str(-42.5f, 1);
+    tinysh_float2str(-42.5f, float_str, sizeof(float_str), 1);
     test_assert("Negative float", strcmp(float_str, "-42.5") == 0,
                "Failed to convert negative float");
     
     // Test zero float
-    float_str = tinysh_float2str(0.0f, 2);
+    tinysh_float2str(0.0f, float_str, sizeof(float_str), 2);
     test_assert("Zero float", strcmp(float_str, "0.00") == 0,
                "Failed to convert zero float");
 }
@@ -361,7 +422,7 @@ void test_conversion_handler(int argc, char **argv) {
 /**
  * Authentication tests
  */
-void test_auth_handler(int argc, char **argv) {
+void test_auth_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -411,4 +472,47 @@ void test_auth_handler(int argc, char **argv) {
                 1,
                 "This test should always pass");
 #endif   
+}
+/**
+ * Help output tests
+ */
+void test_help_handler(int argc, const char **argv) {
+    (void)argc;
+    (void)argv;
+    
+    test_section("Help Output");
+    
+    /* 
+     * We invoke help_command_line directly with a local buffer to avoid 
+     * interacting with the global input buffer while a command ("test run") 
+     * is executing. This prevents corruption of the active command buffer.
+     */
+    
+    // 1. Test Global Help ('?')
+    char help_cmd_buf[] = ""; // Empty string simulates "?" at root
+    
+    test_capture_start();
+    help_command_line(tinysh_get_root_cmd(), help_cmd_buf);
+    test_capture_stop();
+    
+    test_assert("Help contains 'test'", 
+                test_capture_contains("test"),
+                "Help output missing 'test' command");
+                
+    test_assert("Help contains 'help'", 
+                test_capture_contains("help"),
+                "Help output missing 'help' command");
+                
+    // 2. Test Subcommand Help ('test ?')
+    char sub_help_cmd_buf[] = "test"; // "test" context for help
+    
+    test_capture_clear();
+    test_capture_start();
+    help_command_line(tinysh_get_root_cmd(), sub_help_cmd_buf);
+    test_capture_stop();
+    
+    // Verify subcommand help
+    test_assert("Subcommand help", 
+                test_capture_contains("parser") && test_capture_contains("history"),
+                "Help output missing subcommands");
 }

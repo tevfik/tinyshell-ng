@@ -6,23 +6,7 @@
 /**
  * TinyShell Test Framework
  * ----------------------
- * Test suite for verifying TinyShell functionality. Tests cover:
- * - Command parsing and execution
- * - History functionality
- * - Tokenization and string handling
- * - Number conversion utilities
- * - Authentication system
- *
- * Usage:
- * 1. From running shell: type "test run" to execute all tests
- * 2. From command line: ./tinysh_shell -t to run tests and exit
- * 3. Individual test commands:
- *    - test parser
- *    - test history
- *    - test commands
- *    - test tokenize
- *    - test conversion
- *    - test auth
+ * Test suite for verifying TinyShell functionality.
  */
 
 /**
@@ -39,13 +23,36 @@ void tinysh_test_init(void);
  */
 int tinysh_run_tests(void);
 
+/**
+ * Initialize output capture
+ * Redirects tinysh_char_out to an internal buffer for verification
+ */
+void test_capture_start(void);
+
+/**
+ * Stop output capture and restore normal output
+ */
+void test_capture_stop(void);
+
+/**
+ * Get the captured output buffer
+ */
+const char* test_capture_get(void);
+
+/**
+ * Verify if captured output contains the expected string
+ * 
+ * @param expected String to search for
+ * @return 1 if found, 0 if not
+ */
+int test_capture_contains(const char *expected);
+
+/**
+ * Clear the capture buffer
+ */
+void test_capture_clear(void);
+
 /* Export test commands so they can be added manually if desired */
 extern tinysh_cmd_t test_cmd;
-extern tinysh_cmd_t test_run_cmd;
-extern tinysh_cmd_t test_parser_cmd;
-extern tinysh_cmd_t test_history_cmd;
-extern tinysh_cmd_t test_commands_cmd;
-extern tinysh_cmd_t test_tokenize_cmd;
-extern tinysh_cmd_t test_conversion_cmd;
 
 #endif /* TINYSH_TEST_H */

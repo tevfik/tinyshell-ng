@@ -27,9 +27,17 @@ tinysh_cmd_t quit_cmd = {
     0, "quit", "exit shell", _NOARG_, quit_fnt, (void *)&tinyshell_active, 0, 0
 };
 
+#if HISTORY_DEPTH > 0
+// History management using a simplified approach
+// Instead of a true ring buffer which is complex to manage with variable length strings,
+// we use a rolling index into a fixed array of buffers.
+// Optimization: Using a single large buffer and pointers would be more RAM efficient
+// but much more complex. For now, we stick to the array but ensure safety.
 static char input_buffers[HISTORY_DEPTH][BUFFER_SIZE+1];
-static char trash_buffer[BUFFER_SIZE+1]={0};
 static int cur_buf_index=0;
+#endif
+
+static char trash_buffer[BUFFER_SIZE+1]={0};
 static char context_buffer[BUFFER_SIZE+1]={0};
 static int cur_context=0;
 static int cur_index=0;
@@ -38,8 +46,8 @@ static tinysh_cmd_t *root_cmd=&help_cmd;
 static tinysh_cmd_t *cur_cmd_ctx=0;
 static void *tinysh_arg=0;
 
-int tinysh_strlen(char *s);
-void tinysh_puts(char *s);
+int tinysh_strlen(const char *s);
+void tinysh_puts(const char *s);
 void start_of_line();
 int complete_command_line(tinysh_cmd_t *cmd, char *_str);
 int help_command_line(tinysh_cmd_t *cmd, char *_str);
@@ -48,10 +56,10 @@ int exec_command_line(tinysh_cmd_t *cmd, char *_str);
 void exec_command(tinysh_cmd_t *cmd, char *str);
 void do_context(tinysh_cmd_t *cmd, char *str);
 int parse_command(tinysh_cmd_t **_cmd, char **_str);
-int strstart(char *s1, char *s2);
+int strstart(const char *s1, const char *s2);
 
 /* few useful utilities that may be missing */
-int tinysh_strlen(char *s)
+int tinysh_strlen(const char *s)
 {
   int i;
   if (!s) return 0; // Handle NULL pointer
@@ -60,7 +68,7 @@ int tinysh_strlen(char *s)
 }
 
 /* Safer version of puts that checks for NULL */
-void tinysh_puts(char *s)
+void tinysh_puts(const char *s)
 {
   if (!s || !tinysh_char_out) return;  // Safety check
   
@@ -70,7 +78,7 @@ void tinysh_puts(char *s)
 
 /* callback for help function
  */
-void help_fnt(int argc, char **argv)
+void help_fnt(int argc, const char **argv)
 {
   ((void)(argc));
   ((void)(argv));
@@ -99,7 +107,7 @@ void help_fnt(int argc, char **argv)
 /**
  * Command handler for the 'quit' command
  */
-void quit_fnt(int argc, char **argv) {
+void quit_fnt(int argc, const char **argv) {
   (void)argc; // Unused
   (void)argv; // Unused
   
@@ -131,7 +139,7 @@ char is_tinyshell_active(void) {
 
 #if AUTHENTICATION_ENABLED
 /* Command handler for authentication */
-void auth_cmd_handler(int argc, char **argv) {
+void auth_cmd_handler(int argc, const char **argv) {
     if (argc != 2) {
         tinysh_printf("Usage: auth <password>\r\n");
         return;
@@ -178,7 +186,7 @@ enum { NULLMATCH,FULLMATCH,PARTMATCH,UNMATCH,MATCH,AMBIG };
  * but there are remaining chars in s1, UNMATCH if s1 does not start with
  * s2
  */
-int strstart(char *s1, char *s2)
+int strstart(const char *s1, const char *s2)
 {
   while(*s1 && *s1==*s2) { s1++; s2++; }
 
@@ -292,13 +300,14 @@ void exec_command(tinysh_cmd_t *cmd, char *str)
 #endif
 
   /* Continue with normal command execution */
-  char *argv[MAX_ARGS];
+  const char *argv[MAX_ARGS];
   int argc=0;
   int i;
 
   /* Original command execution code */
-  for(i=0;i<BUFFER_SIZE;i++)
+  for(i=0;i<BUFFER_SIZE-1 && str[i];i++)
     trash_buffer[i]=str[i];
+  trash_buffer[i]=0;
   str=trash_buffer;
 
   argv[argc++]=cmd->name;
@@ -316,7 +325,7 @@ void exec_command(tinysh_cmd_t *cmd, char *str)
   if(cmd->function)
     {
       tinysh_arg = real_arg;
-      cmd->function(argc, &argv[0]);
+      cmd->function(argc, argv);
     }
 }
 
@@ -600,7 +609,11 @@ void start_of_line()
  */
 void tinysh_char_in(char c)
 {
+#if HISTORY_DEPTH > 0
   char *line=input_buffers[cur_buf_index];
+#else
+  static char line[BUFFER_SIZE+1];
+#endif
 
   // Safety check - ensure output functions are initialized
   if (!tinysh_char_out) {
@@ -620,9 +633,13 @@ void tinysh_char_in(char c)
         {
           cmd=cur_cmd_ctx?cur_cmd_ctx->child:root_cmd;
           exec_command_line(cmd,line);
+#if HISTORY_DEPTH > 0
           cur_buf_index=(cur_buf_index+1)%HISTORY_DEPTH;
-          cur_index=0;
           input_buffers[cur_buf_index][0]=0;
+#else
+          line[0]=0;
+#endif
+          cur_index=0;
         }
       if(ECHO_INPUT)
         start_of_line();   
@@ -645,6 +662,7 @@ void tinysh_char_in(char c)
           line[cur_index]=0;
         }
     }
+#if HISTORY_DEPTH > 1
   else if(c==16) /* CTRL-P: back in history */
     {
       int prevline=(cur_buf_index+HISTORY_DEPTH-1)%HISTORY_DEPTH;
@@ -679,6 +697,7 @@ void tinysh_char_in(char c)
           cur_buf_index=nextline;
         }
     }
+#endif
   else if(c=='?') /* display help */
     {
       tinysh_cmd_t *cmd;
@@ -737,7 +756,11 @@ void tinysh_add_command(tinysh_cmd_t *cmd)
         }
       else
         {
-          while(cm->next) cm=cm->next;
+          while(cm->next) {
+            if(cm == cmd) return; /* Prevent duplicate addition */
+            cm=cm->next;
+          }
+          if(cm == cmd) return;
           cm->next=cmd;
         }
     }
@@ -748,14 +771,18 @@ void tinysh_add_command(tinysh_cmd_t *cmd)
   else
     {
       cm=root_cmd;
-      while(cm->next) cm=cm->next;
+      while(cm->next) {
+        if(cm == cmd) return; /* Prevent duplicate addition */
+        cm=cm->next;
+      }
+      if(cm == cmd) return;
       cm->next=cmd;
     }
 }
 
 /* modify shell prompt
  */
-void tinysh_set_prompt(char *str)
+void tinysh_set_prompt(const char *str)
 {
   unsigned int i;
   for(i=0;str[i] && i<PROMPT_SIZE;i++)
@@ -774,6 +801,8 @@ void *tinysh_get_arg()
 
 /* string to decimal/hexadecimal conversion
  */
+#include <limits.h>
+
 unsigned long tinysh_atoxi(char *s)
 {
   int ishex=0;
@@ -789,19 +818,27 @@ unsigned long tinysh_atoxi(char *s)
 
   while(*s)
     {
-      if(ishex)
+      if(ishex) {
+          if (res > (ULONG_MAX / 16)) return ULONG_MAX; // Overflow check
           res*=16;
-      else
+      }
+      else {
+          if (res > (ULONG_MAX / 10)) return ULONG_MAX; // Overflow check
           res*=10;
+      }
 
+      unsigned long digit = 0;
       if(*s>='0' && *s<='9')
-          res+=(unsigned long int)(*s-'0');
+          digit = (unsigned long)(*s-'0');
       else if(ishex && *s>='a' && *s<='f')
-          res+=(unsigned long int)(*s+10-'a');
+          digit = (unsigned long)(*s+10-'a');
       else if(ishex && *s>='A' && *s<='F')
-          res+=(unsigned long int)(*s+10-'A');
+          digit = (unsigned long)(*s+10-'A');
       else
-	break;
+        break;
+
+      if (ULONG_MAX - res < digit) return ULONG_MAX; // Overflow check
+      res += digit;
 
       s++;
     }
@@ -938,18 +975,19 @@ int tinysh_tokenize(char *str, char token, char **vector, int max_arg){
     return argc;
 }
 
-char* tinysh_float2str(float f, int precision)
+void tinysh_float2str(float f, char *str, int len, int precision)
 {
-    static char str[30];
     int i = 0;
     int a, b;
+    
+    if (!str || len <= 0) return;
     
     if (precision < 0) precision = 0;
     if (precision > 10) precision = 10;  // Reasonable limit
     
     // Handle negative numbers
     if(f < 0.0) {
-        str[i++] = '-';
+        if(i < len - 1) str[i++] = '-';
         f = -f;
     }
     
@@ -959,7 +997,7 @@ char* tinysh_float2str(float f, int precision)
     
     // Convert integer part to string
     if (a == 0) {
-        str[i++] = '0';
+        if(i < len - 1) str[i++] = '0';
     } else {
         char temp[12];
         int temp_i = 0;
@@ -971,17 +1009,17 @@ char* tinysh_float2str(float f, int precision)
         }
         
         // Copy to output string in correct order
-        while (temp_i > 0) {
+        while (temp_i > 0 && i < len - 1) {
             str[i++] = temp[--temp_i];
         }
     }
     
     // Add decimal point and fractional part
-    if (precision > 0) {
+    if (precision > 0 && i < len - 1) {
         str[i++] = '.';
         
         // Extract digits of the fractional part
-        for (b = 0; b < precision; b++) {
+        for (b = 0; b < precision && i < len - 1; b++) {
             f *= 10.0f;
             int digit = (int)f;
             str[i++] = (char)('0' + digit);
@@ -990,7 +1028,6 @@ char* tinysh_float2str(float f, int precision)
     }
     
     str[i] = '\0';
-    return str;
 }
 
 /**

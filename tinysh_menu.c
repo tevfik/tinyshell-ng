@@ -10,11 +10,11 @@ static char waiting_for_keypress = 0;  /* Changed from uint8_t to char */
 
 /* Argument collection state variables */
 static char collecting_arguments = 0;  /* Changed from uint8_t to char */
-static void (*pending_function_arg)(int argc, char **argv) = NULL;
+static void (*pending_function_arg)(int argc, const char **argv) = NULL;
 static char arg_buffer[BUFFER_SIZE];
 static int arg_buffer_index = 0;  /* Keep as int for potential large buffers */
-static char *arg_title = NULL;
-static char *arg_param_desc = NULL;
+static const char *arg_title = NULL;
+static const char *arg_param_desc = NULL;
 
 /* Forward declarations */
 static void navigate_menu(int direction);
@@ -24,8 +24,8 @@ static void display_menu_footer(void);
 static void execute_menu_item(tinysh_menu_item_t *item);
 static void menu_select_item(unsigned char index);  /* Changed from uint8_t */
 static void clear_screen(void);
-static void prompt_for_arguments(char *title, char *param_desc, void (*function_arg)(int argc, char **argv));
-static void start_argument_collection(char *title, char *param_desc, void (*function_arg)(int argc, char **argv));
+static void prompt_for_arguments(const char *title, const char *param_desc, void (*function_arg)(int argc, const char **argv));
+static void start_argument_collection(const char *title, const char *param_desc, void (*function_arg)(int argc, const char **argv));
 static int handle_argument_input(char c); /* Keep return as int for compatibility */
 
 /* Forward variable declarations to ensure visibility */
@@ -82,7 +82,7 @@ void tinysh_menu_init(tinysh_menu_t *root_menu) {
 /**
  * Menu mode command handler
  */
-void menu_cmd_handler(int argc, char **argv) {
+void menu_cmd_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     
@@ -437,7 +437,7 @@ static void display_menu_footer(void) {
 /**
  * Start argument collection mode
  */
-static void start_argument_collection(char *title, char *param_desc, void (*function_arg)(int argc, char **argv)) {
+static void start_argument_collection(const char *title, const char *param_desc, void (*function_arg)(int argc, const char **argv)) {
     collecting_arguments = 1;
     pending_function_arg = function_arg;
     arg_buffer_index = 0;
@@ -479,7 +479,7 @@ static int handle_argument_input(char c) {
         int user_argc = tinysh_tokenize(arg_buffer, ' ', user_args, MAX_ARGS-1);
 
         // Create complete argument array with command name as first argument
-        char *args[MAX_ARGS];
+        const char *args[MAX_ARGS];
         args[0] = arg_title;  // Command name as argv[0]
 
         // Copy user arguments to positions 1 and beyond
@@ -523,7 +523,7 @@ static int handle_argument_input(char c) {
 /**
  * Prompt for arguments and call a function with them
  */
-static void prompt_for_arguments(char *title, char *param_desc, void (*function_arg)(int argc, char **argv)) {
+static void prompt_for_arguments(const char *title, const char *param_desc, void (*function_arg)(int argc, const char **argv)) {
     // Just start the argument collection process
     // The actual character processing will happen in tinysh_menu_process_char
     start_argument_collection(title, param_desc, function_arg);
@@ -610,7 +610,7 @@ static void execute_menu_item(tinysh_menu_item_t *item) {
                 if (cmd->usage && strcmp(cmd->usage, _NOARG_) != 0) {
                     // Command requires arguments - prompt for them
                     prompt_for_arguments(cmd->name, cmd->usage,
-                                       (void (*)(int, char**))cmd->function);
+                                       (void (*)(int, const char**))cmd->function);
                 } else {
                     // No arguments required - execute directly
                     // Save menu mode state
@@ -620,7 +620,7 @@ static void execute_menu_item(tinysh_menu_item_t *item) {
                     in_menu_mode = 0;
 
                     // Execute the command directly
-                    char *argv[1] = {cmd->name};
+                    const char *argv[1] = {cmd->name};
                     cmd->function(1, argv);
 
                     // Restore menu mode
@@ -681,7 +681,7 @@ static void execute_menu_item(tinysh_menu_item_t *item) {
             tinysh_char_in('\r'); // Clear current line
 
             // Type the command
-            char *cmd = item->command;
+            const char *cmd = item->command;
             while (*cmd) {
                 tinysh_char_in(*cmd++);
             }

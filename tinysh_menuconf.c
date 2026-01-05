@@ -31,7 +31,7 @@
 static void show_system_info(void);
 static void toggle_led(void);
 static void reboot_system(void);
-static void set_parameter_with_args(int argc, char **argv);
+static void set_parameter_with_args(int argc, const char **argv);
 
 /* Define the menu structures */
 
@@ -99,7 +99,7 @@ static void reboot_system(void) {
     tinysh_printf("On real hardware, this would restart the device.\r\n");
 }
 
-static void set_parameter_with_args(int argc, char **argv) {
+static void set_parameter_with_args(int argc, const char **argv) {
     tinysh_printf("Setting parameters with %d arguments:\r\n", argc);
     
     for (int i = 0; i < argc; i++) {

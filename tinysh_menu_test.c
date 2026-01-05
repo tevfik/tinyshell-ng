@@ -118,7 +118,7 @@ int tinysh_menu_run_tests(void) {
 
 #if MENU_ENABLED
 // Add test command
-void menu_test_cmd_handler(int argc, char **argv) {
+void menu_test_cmd_handler(int argc, const char **argv) {
     (void)argc;
     (void)argv;
     tinysh_menu_run_tests();
