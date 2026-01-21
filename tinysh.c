@@ -2,6 +2,9 @@
 #include <stdint.h> 
 #include "tinysh.h"
 
+/* ANSI escape code for clearing from cursor to end of line */
+#define ANSI_ERASE_TO_EOL "\x1b[K"
+
 void (*tinysh_char_out)(unsigned char);	/* Pointer to the output stream */
 int (*tinysh_printf)(const char *, ...);
 
@@ -670,12 +673,11 @@ void tinysh_char_in(char c)
       if(input_buffers[prevline][0])
         {
           line=input_buffers[prevline];
-          /* fill the rest of the line with spaces */
-          while(cur_index-->tinysh_strlen(line))
-            tinysh_puts("\b \b");
+          /* Go to start of line, reprint prompt, print new line, clear rest of line */
           tinysh_char_out('\r');
           start_of_line();
           tinysh_puts(line);
+          tinysh_puts(ANSI_ERASE_TO_EOL); /* Clear to end of line */
           cur_index=tinysh_strlen(line);
           cur_buf_index=prevline;
         }
@@ -687,12 +689,11 @@ void tinysh_char_in(char c)
       if(input_buffers[nextline][0])
         {
           line=input_buffers[nextline];
-          /* fill the rest of the line with spaces */
-          while(cur_index-->tinysh_strlen(line))
-            tinysh_puts("\b \b");
+          /* Go to start of line, reprint prompt, print new line, clear rest of line */
           tinysh_char_out('\r');
           start_of_line();
           tinysh_puts(line);
+          tinysh_puts(ANSI_ERASE_TO_EOL); /* Clear to end of line */
           cur_index=tinysh_strlen(line);
           cur_buf_index=nextline;
         }
