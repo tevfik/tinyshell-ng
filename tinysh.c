@@ -401,13 +401,16 @@ void display_child_help(tinysh_cmd_t *cmd)
   int len=0;
 
   tinysh_puts("\n\r");
-  for(cm=cmd;cm;cm=cm->next)
-    if(len<tinysh_strlen(cm->name))
-      len=tinysh_strlen(cm->name);
+  for(cm=cmd;cm;cm=cm->next) {
+    int cur_len = tinysh_strlen(cm->name);
+    if(len<cur_len)
+      len=cur_len;
+  }
   for(cm=cmd;cm;cm=cm->next)
     if(cm->help)
       {
         int i;
+        int cur_len = tinysh_strlen(cm->name);
         
         // Add asterisk indicator for admin commands
 #if AUTHENTICATION_ENABLED
@@ -422,7 +425,7 @@ void display_child_help(tinysh_cmd_t *cmd)
         
         tinysh_puts(cm->name);
         // Adjust padding to maintain alignment with the indicators
-        for(i=tinysh_strlen(cm->name);i<len+2;i++)
+        for(i=cur_len;i<len+2;i++)
           tinysh_char_out(' ');
         tinysh_puts(cm->help);
         tinysh_puts("\n\r");

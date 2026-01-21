@@ -27,6 +27,7 @@ void test_tokenize_handler(int argc, const char **argv);
 void test_conversion_handler(int argc, const char **argv);
 void test_auth_handler(int argc, const char **argv);
 void test_help_handler(int argc, const char **argv);
+void test_benchmark_handler(int argc, const char **argv);
 
 /* Test helper functions */
 static void test_assert(const char *test_name, int condition, const char *message);
@@ -73,7 +74,7 @@ void test_capture_clear(void) {
 
 /* Test command definitions */
 tinysh_cmd_t test_cmd = {
-    0, "test", "TinyShell unit tests", "[run|parser|history|commands|tokenize|conversion|auth]", 
+    0, "test", "TinyShell unit tests", "[run|parser|history|commands|tokenize|conversion|auth|benchmark]",
     test_cmd_handler, 0, 0, 0
 };
 
@@ -117,6 +118,8 @@ tinysh_cmd_t test_help_cmd = {
     test_help_handler, 0, 0, 0
 };
 
+extern tinysh_cmd_t test_benchmark_cmd;
+
 /**
  * Initialize TinyShell test framework 
  */
@@ -133,6 +136,7 @@ void tinysh_test_init(void) {
     tinysh_add_command(&test_conversion_cmd);
     tinysh_add_command(&test_auth_cmd);
     tinysh_add_command(&test_help_cmd);
+    tinysh_add_command(&test_benchmark_cmd);
     
     if (tinysh_printf) {
         tinysh_printf("TinyShell test framework initialized\r\n");
@@ -516,3 +520,87 @@ void test_help_handler(int argc, const char **argv) {
                 test_capture_contains("parser") && test_capture_contains("history"),
                 "Help output missing subcommands");
 }
+
+#include <time.h>
+
+/* No-op output function for benchmarking */
+static void no_op_char_out(unsigned char c) {
+    (void)c;
+}
+
+/* Benchmark handler */
+void test_benchmark_handler(int argc, const char **argv) {
+    (void)argc;
+    (void)argv;
+
+    test_section("Benchmark");
+
+    /* Save original output function */
+    void (*saved_char_out)(unsigned char) = tinysh_char_out;
+
+    /* Set to no-op */
+    tinysh_out(no_op_char_out);
+
+    /* Add many commands */
+    #define NUM_BENCH_CMDS 1000
+    /* We need to keep these commands alive */
+    static tinysh_cmd_t *bench_cmds = NULL;
+    static char *names = NULL;
+
+    if (!bench_cmds) {
+        /* Only allocate once */
+        if(saved_char_out) {
+             /* We can't use tinysh_printf here because we disabled output,
+                so we restore it temporarily to print status */
+             tinysh_out(saved_char_out);
+             tinysh_printf("Generating %d commands for benchmark...\r\n", NUM_BENCH_CMDS);
+             tinysh_out(no_op_char_out);
+        }
+
+        bench_cmds = calloc(NUM_BENCH_CMDS, sizeof(tinysh_cmd_t));
+        names = calloc(NUM_BENCH_CMDS, 60); /* 60 chars per name */
+
+        if (!bench_cmds || !names) {
+             tinysh_out(saved_char_out);
+             tinysh_printf("Memory allocation failed for benchmark\r\n");
+             return;
+        }
+
+        for(int i=0; i<NUM_BENCH_CMDS; i++) {
+            /* Create increasing lengths to force max path in strlen logic */
+            int extra = i % 40;
+            int pos = sprintf(names + i*60, "cmd_%04d_", i);
+            for(int j=0; j<extra; j++) names[i*60 + pos + j] = 'x';
+            names[i*60 + pos + extra] = 0;
+
+            bench_cmds[i].name = names + i*60;
+            bench_cmds[i].help = "benchmark command";
+            tinysh_add_command(&bench_cmds[i]);
+        }
+    }
+
+    /* Benchmark loop */
+    clock_t start = clock();
+    char buf[10];
+    for(int i=0; i<10000; i++) {
+        tinysh_reset_context();
+        buf[0] = 0;
+        /* This will trigger display_child_help(root_cmd) which includes our 1000 commands */
+        help_command_line(tinysh_get_root_cmd(), buf);
+    }
+    clock_t end = clock();
+
+    /* Restore output */
+    tinysh_out(saved_char_out);
+
+    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+    tinysh_printf("Time taken for 10000 iterations with %d commands: %f seconds\r\n", NUM_BENCH_CMDS, time_taken);
+
+    test_assert("Benchmark finished", 1, "Benchmark completed");
+}
+
+/* Add benchmark command definition */
+tinysh_cmd_t test_benchmark_cmd = {
+    &test_cmd, "benchmark", "Run performance benchmark", 0,
+    test_benchmark_handler, 0, 0, 0
+};
