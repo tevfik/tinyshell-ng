@@ -28,8 +28,19 @@ static void prompt_for_arguments(const char *title, const char *param_desc, void
 static void start_argument_collection(const char *title, const char *param_desc, void (*function_arg)(int argc, const char **argv));
 static int handle_argument_input(char c); /* Keep return as int for compatibility */
 
-/* Forward variable declarations to ensure visibility */
-static tinysh_menu_t cmd_menu;
+/* Storage for the dynamic command menu. The full definition lives up
+   here so menu functions defined further down the file can see it
+   without depending on ordering of declarations. The duplicate forward
+   declaration that used to live here caused `cmd_menu` to be considered
+   an incomplete type by some compilers when referenced from
+   tinysh_generate_cmd_menu(). */
+static tinysh_menu_t cmd_menu = {
+    "Shell Commands",
+    { {0} },  /* will be filled dynamically by tinysh_generate_cmd_menu */
+    0,        /* item_count */
+    0         /* parent_index */
+};
+
 static tinysh_menu_t cmd_submenus[MAX_CMD_SUBMENUS];
 static int submenu_count = 0;
 static char submenu_titles[MAX_CMD_SUBMENUS][64];
@@ -815,10 +826,4 @@ tinysh_menu_t* tinysh_generate_cmd_menu(void) {
     return &cmd_menu;
 }
 
-/* Storage for command menu and submenus */
-static tinysh_menu_t cmd_menu = {
-    "Shell Commands",
-    { {0} },  // Will be filled dynamically
-    0,        // Item count will be set during initialization
-    0         // Parent index
-};
+/* cmd_menu definition lives at the top of the file. */
