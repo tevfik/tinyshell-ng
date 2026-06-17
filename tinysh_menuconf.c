@@ -30,8 +30,6 @@
 /* Forward declarations of menu functions */
 static void show_system_info(void);
 static void toggle_led(void);
-static void reboot_system(void);
-static void set_parameter_with_args(int argc, const char **argv);
 
 /* Define the menu structures */
 
@@ -40,10 +38,9 @@ tinysh_menu_t system_menu = {
     "System Menu",
     {
         {"System Information", MENU_ITEM_FUNCTION, .function = show_system_info},
-        {"Reboot System", MENU_ITEM_FUNCTION | MENU_ITEM_ADMIN, .function = reboot_system},
-        {"Back to Main Menu", MENU_ITEM_BACK, {.submenu = NULL}} // Or any other variant
+        {"Back to Main Menu", MENU_ITEM_BACK, {.submenu = NULL}}
     },
-    3,  /* item_count */
+    2,  /* item_count */
     0   /* parent_index */
 };
 
@@ -53,7 +50,7 @@ tinysh_menu_t tools_menu = {
     {
         {"Run Echo Test", MENU_ITEM_COMMAND, .command = "echo Hello from menu!"},
         {"Toggle LED", MENU_ITEM_FUNCTION, .function = toggle_led},
-        {"Back to Main Menu", MENU_ITEM_BACK, {.submenu = NULL}} // Or any other variant
+        {"Back to Main Menu", MENU_ITEM_BACK, {.submenu = NULL}}
     },
     3,  /* item_count */
     0   /* parent_index */
@@ -64,17 +61,11 @@ tinysh_menu_t main_menu = {
     "TinyShell Main Menu",
     {
         {"System", MENU_ITEM_SUBMENU, .submenu = &system_menu},
-        {"Tools", MENU_ITEM_SUBMENU, .submenu = &tools_menu}, 
-        {"Commands", MENU_ITEM_SUBMENU, .submenu = NULL}, // Will be set in init
-        {"Set Parameter", MENU_ITEM_FUNCTION_ARG, 
-            {
-                .function_arg = set_parameter_with_args,
-                .params = "name value"
-            }
-        },
+        {"Tools", MENU_ITEM_SUBMENU, .submenu = &tools_menu},
+        {"Commands", MENU_ITEM_SUBMENU, .submenu = NULL}, /* set in init */
         {"Exit Menu Mode", MENU_ITEM_EXIT, {.submenu = NULL}}
     },
-    5,  /* item_count - updated for new menu item */
+    4,  /* item_count */
     0   /* parent_index */
 };
 
@@ -84,8 +75,8 @@ static void show_system_info(void) {
     tinysh_printf("  TinyShell Version: %s\r\n", TINYSHELL_VERSION);
     tinysh_printf("  Buffer Size: %d bytes\r\n", BUFFER_SIZE);
     tinysh_printf("  History Depth: %d entries\r\n", HISTORY_DEPTH);
-    tinysh_printf("  Authentication: %s\r\n", AUTHENTICATION_ENABLED ? "Enabled" : "Disabled"); 
-    tinysh_printf("  Menu Extention: %s\r\n", MENU_ENABLED ? "Enabled" : "Disabled"); 
+    tinysh_printf("  Authentication: %s\r\n", AUTHENTICATION_ENABLED ? "Enabled" : "Disabled");
+    tinysh_printf("  Menu Extention: %s\r\n", MENU_ENABLED ? "Enabled" : "Disabled");
 }
 
 static void toggle_led(void) {
@@ -94,30 +85,13 @@ static void toggle_led(void) {
     tinysh_printf("LED is now %s\r\n", led_state ? "ON" : "OFF");
 }
 
-static void reboot_system(void) {
-    tinysh_printf("Simulating system reboot...\r\n");
-    tinysh_printf("On real hardware, this would restart the device.\r\n");
-}
-
-static void set_parameter_with_args(int argc, const char **argv) {
-    tinysh_printf("Setting parameters with %d arguments:\r\n", argc);
-    
-    for (int i = 0; i < argc; i++) {
-        tinysh_printf("  Arg %d: %s\r\n", i, argv[i]);
-    }
-    
-    if (argc >= 2) {
-        tinysh_printf("\r\nSet parameter '%s' to value '%s'\r\n", 
-                     argv[0], argv[1]);
-    }
-}
 void tinysh_menuconf_init(void);
 /* Function to initialize the menu system */
 void tinysh_menuconf_init(void) {
     // Generate command menu and link it to main menu
     tinysh_menu_t *cmd_menu = tinysh_generate_cmd_menu();
     main_menu.items[2].submenu = cmd_menu;
-    
+
     // Initialize the menu system with the main menu
     tinysh_menu_init(&main_menu);
 }
