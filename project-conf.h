@@ -19,15 +19,38 @@
  * gcc -DBUFFER_SIZE=128 -DAUTHENTICATION_ENABLED=0 ...
  */
 
-/* TinyShell Configuration */
+/* TinyShell Configuration.
+   Every default below is wrapped in #ifndef so projects can override
+   any value at compile time with -D, e.g.:
+     gcc -DBUFFER_SIZE=128 -DMENU_DISPLAY_ITEMS=5 ...
+   Without these guards, gcc picks up project-conf.h via the source
+   file's own directory (current-directory-first lookup) BEFORE any
+   -I include path is searched, which silently prevents downstream
+   projects from tuning TinyShell without modifying this file. */
+#ifndef BUFFER_SIZE
 #define BUFFER_SIZE                 256
+#endif
+#ifndef HISTORY_DEPTH
 #define HISTORY_DEPTH               4
+#endif
+#ifndef MAX_ARGS
 #define MAX_ARGS                    8
+#endif
+#ifndef TOPCHAR
 #define TOPCHAR                    '/'
+#endif
+#ifndef ECHO_INPUT
 #define ECHO_INPUT                  1
+#endif
+#ifndef PARTIAL_MATCH
 #define PARTIAL_MATCH               1
+#endif
+#ifndef AUTOCOMPLATION
 #define AUTOCOMPLATION              1
+#endif
+#ifndef _PROMPT_
 #define _PROMPT_                    "tinysh> "
+#endif
 
 /**
  * TinyShell Security Configuration
@@ -38,8 +61,12 @@
  *   - Used by "auth" command for admin privileges
  */
 
+#ifndef AUTHENTICATION_ENABLED
 #define AUTHENTICATION_ENABLED      1               // Enable authentication
+#endif
+#ifndef DEFAULT_ADMIN_PASSWORD
 #define DEFAULT_ADMIN_PASSWORD      "embedded2024"  // Custom admin password
+#endif
 
 /* Menu System Configuration */
 #ifndef MENU_ENABLED
@@ -48,12 +75,24 @@
 
 #if MENU_ENABLED
 /* Menu-based UI configuration */
+#ifndef MENU_MAX_DEPTH
 #define MENU_MAX_DEPTH            5  // Maximum nesting level of menus
+#endif
+#ifndef MENU_MAX_ITEMS
 #define MENU_MAX_ITEMS            10 // Maximum items per menu level
+#endif
+#ifndef MENU_DISPLAY_ITEMS
 #define MENU_DISPLAY_ITEMS        10  // Number of items to display at once
+#endif
+#ifndef MAX_CMD_MENU_ITEMS
 #define MAX_CMD_MENU_ITEMS        100
+#endif
+#ifndef MAX_CMD_SUBMENUS
 #define MAX_CMD_SUBMENUS          30
+#endif
+#ifndef MENU_COLOR_ENABLED
 #define MENU_COLOR_ENABLED        1
+#endif
 #endif
 
 #endif /* PROJECT_CONF_H */
