@@ -74,21 +74,25 @@
 #endif
 
 #if MENU_ENABLED
-/* Menu-based UI configuration */
+/* Menu-based UI configuration.
+   MENU_MAX_ITEMS is the total slots in the items[] array of tinysh_menu_t
+   (including the "Back" item appended after the user commands). The
+   maximum number of USER commands that can be listed in the auto-generated
+   Commands submenu is therefore MENU_MAX_ITEMS - 1. */
 #ifndef MENU_MAX_DEPTH
 #define MENU_MAX_DEPTH            5  // Maximum nesting level of menus
 #endif
 #ifndef MENU_MAX_ITEMS
-#define MENU_MAX_ITEMS            10 // Maximum items per menu level
+#define MENU_MAX_ITEMS            16 // Total slots per menu (commands + Back)
 #endif
 #ifndef MENU_DISPLAY_ITEMS
 #define MENU_DISPLAY_ITEMS        10  // Number of items to display at once
 #endif
 #ifndef MAX_CMD_MENU_ITEMS
-#define MAX_CMD_MENU_ITEMS        100
+#define MAX_CMD_MENU_ITEMS        (MENU_MAX_ITEMS - 1)  // max USER commands
 #endif
 #ifndef MAX_CMD_SUBMENUS
-#define MAX_CMD_SUBMENUS          30
+#define MAX_CMD_SUBMENUS          (MENU_MAX_ITEMS - 1) // max submenus
 #endif
 #ifndef MENU_COLOR_ENABLED
 #define MENU_COLOR_ENABLED        1
